@@ -27,7 +27,7 @@
           <button class="nav-item" data-view="homework">숙제관리</button>
           <button class="nav-item" data-view="classroomAdmin">수업방 관리</button>
           <button class="nav-item" data-view="classroomStudent">학생용 수업방</button>
-          <button class="nav-item" data-view="aiReports">AI 보고서</button>
+          <button class="nav-item" data-view="aiReports">API 보고서</button>
           <button class="nav-item" data-view="consulting">상담기록</button>
           <button class="nav-item" data-view="waitlist">대기자 명단</button>
         </nav>
@@ -460,7 +460,7 @@
 
         <section class="view" id="aiReports">
           <div class="notice">
-            <strong>AI 보고서는 학생명단을 바꾸지 않고 따로 생성합니다</strong>
+            <strong>API 보고서는 학생명단을 바꾸지 않고 따로 생성합니다</strong>
             <span>선택한 학생의 이름, 학년, 반, 교재, 출결 요약과 선생님이 적은 내용만 OpenAI API로 보내 보고서 초안을 만듭니다. 전화번호는 보내지 않습니다.</span>
           </div>
 
@@ -491,7 +491,7 @@
                   선생님 코멘트
                   <textarea id="aiReportTeacherComment" rows="4" placeholder="예: 질문이 늘었고 실험 결과 정리 태도가 좋아졌습니다. 다음 주에는 오답 정리를 강화하겠습니다."></textarea>
                 </label>
-                <button class="primary-button" id="generateAiReportBtn" type="button">AI 보고서 생성</button>
+                <button class="primary-button" id="generateAiReportBtn" type="button">API 보고서 생성</button>
               </div>
             </section>
 
@@ -500,7 +500,7 @@
                 <h2>생성 결과</h2>
                 <span id="aiReportStatus">대기 중</span>
               </div>
-              <textarea id="aiReportResult" class="ai-report-result" rows="18" placeholder="AI 보고서가 여기에 나타납니다. 생성 후 문장을 꼭 확인하고 수정해서 사용하세요."></textarea>
+              <textarea id="aiReportResult" class="ai-report-result" rows="18" placeholder="API 보고서가 여기에 나타납니다. 생성 후 문장을 꼭 확인하고 수정해서 사용하세요."></textarea>
               <div class="report-actions">
                 <button class="ghost-button" id="copyAiReportBtn" type="button">보고서 복사</button>
                 <button class="ghost-button" id="downloadAiReportBtn" type="button">TXT 저장</button>
