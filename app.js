@@ -612,6 +612,10 @@ function bindEvents() {
   $("#deleteClassInfoBtn").addEventListener("click", deleteClassInfoFromForm);
   $("#saveClassHomeworkBtn").addEventListener("click", saveClassHomework);
   $("#copyClassHomeworkBtn").addEventListener("click", copyClassHomeworkMessage);
+  $("#aiReportStudent").addEventListener("change", fillAiReportDefaults);
+  $("#generateAiReportBtn").addEventListener("click", generateAiReport);
+  $("#copyAiReportBtn").addEventListener("click", copyAiReport);
+  $("#downloadAiReportBtn").addEventListener("click", downloadAiReport);
   $("#consultingStudent").addEventListener("change", renderConsulting);
   $("#addConsultingBtn").addEventListener("click", addConsultingRecord);
   $("#addLeadBtn").addEventListener("click", addNewConsultation);
@@ -662,6 +666,7 @@ function renderAll() {
   renderPayments();
   renderBooks();
   renderHomework();
+  renderAiReportStudentOptions();
   renderConsultingStudentOptions();
   renderConsulting();
   renderNewConsultations();
@@ -1429,6 +1434,139 @@ async function copyClassHomeworkMessage() {
   } catch (error) {
     prompt("아래 내용을 복사해서 보내세요.", message);
   }
+}
+
+function renderAiReportStudentOptions() {
+  const select = $("#aiReportStudent");
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = state.students.length
+    ? sortStudentsByClassGradeName(state.students)
+        .map((student) => `<option value="${student.id}">${student.name} · ${student.grade || "-"} · ${student.className || "-"}</option>`)
+        .join("")
+    : `<option value="">학생을 먼저 등록해 주세요</option>`;
+  if (previous && state.students.some((student) => student.id === previous)) {
+    select.value = previous;
+  }
+  fillAiReportDefaults();
+}
+
+function getStudentAttendanceSummary(studentId) {
+  const records = Object.entries(state.attendance || {})
+    .map(([date, day]) => ({ date, record: day?.[studentId] }))
+    .filter((item) => item.record)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 8);
+  if (!records.length) return "아직 출결 기록이 없습니다.";
+  return records
+    .map(({ date, record }) => {
+      const normalized = typeof record === "string" ? { status: record } : record;
+      const makeup = normalized.makeupDate ? `, 보강일 ${normalized.makeupDate}` : "";
+      const session = normalized.session ? `${normalized.session}회차 ` : "";
+      return `${date}: ${session}${normalized.status || "출석"}${makeup}`;
+    })
+    .join("\n");
+}
+
+function getAiReportStudentPayload(student) {
+  return {
+    name: student.name,
+    school: student.school || "",
+    grade: student.grade || "",
+    className: student.className || "",
+    subject: student.subject || "",
+    book: student.book || "",
+    homework: getHomeworkText(student) || "",
+    homeworkStatus: student.homeworkStatus || "확인 전",
+    memo: student.memo || "",
+  };
+}
+
+function fillAiReportDefaults() {
+  const status = $("#aiReportStatus");
+  const student = state.students.find((item) => item.id === $("#aiReportStudent")?.value);
+  if (!student) {
+    if (status) status.textContent = "학생 없음";
+    return;
+  }
+  if (status) status.textContent = `${student.name} 학생 선택됨`;
+}
+
+async function generateAiReport() {
+  const student = state.students.find((item) => item.id === $("#aiReportStudent").value);
+  if (!student) {
+    alert("보고서를 만들 학생을 먼저 선택해 주세요.");
+    return;
+  }
+
+  const button = $("#generateAiReportBtn");
+  const status = $("#aiReportStatus");
+  const result = $("#aiReportResult");
+  button.disabled = true;
+  status.textContent = "AI가 작성 중...";
+  result.value = "";
+
+  try {
+    const response = await fetch("/api/generate-report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        template: $("#aiReportTemplate").value,
+        student: getAiReportStudentPayload(student),
+        attendanceSummary: getStudentAttendanceSummary(student.id),
+        learningNotes: $("#aiReportLearningNotes").value.trim(),
+        teacherComment: $("#aiReportTeacherComment").value.trim(),
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "보고서 생성에 실패했습니다.");
+    result.value = data.report || "보고서 내용이 비어 있습니다. 입력 내용을 조금 더 적고 다시 시도해 주세요.";
+    status.textContent = "생성 완료";
+  } catch (error) {
+    status.textContent = "생성 실패";
+    result.value = [
+      "AI 보고서를 만들지 못했습니다.",
+      "",
+      "확인할 것:",
+      "1. Vercel 환경변수 OPENAI_API_KEY가 저장되어 있는지",
+      "2. 환경변수 저장 후 Redeploy를 했는지",
+      "3. OpenAI 결제/사용 한도가 정상인지",
+      "",
+      `오류: ${error.message}`,
+    ].join("\n");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function copyAiReport() {
+  const text = $("#aiReportResult").value.trim();
+  if (!text) {
+    alert("복사할 보고서가 없습니다.");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("보고서를 복사했습니다. 카톡이나 문서에 붙여넣어 사용하세요.");
+  } catch (error) {
+    prompt("아래 내용을 복사하세요.", text);
+  }
+}
+
+function downloadAiReport() {
+  const text = $("#aiReportResult").value.trim();
+  if (!text) {
+    alert("저장할 보고서가 없습니다.");
+    return;
+  }
+  const student = state.students.find((item) => item.id === $("#aiReportStudent").value);
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `과수원과학-AI보고서-${student?.name || "학생"}-${today()}.txt`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function renderConsultingStudentOptions() {
