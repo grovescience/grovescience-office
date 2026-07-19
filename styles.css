@@ -988,6 +988,35 @@ td {
   font-style: normal;
 }
 
+.classroom-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.classroom-card .classroom-meta-row span {
+  margin-top: 0;
+}
+
+.visibility-pill {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #f5ece8;
+  color: #a24b35;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.visibility-pill.public {
+  background: #eaf5df;
+  color: var(--green);
+}
+
 .classroom-link {
   min-height: 34px;
   display: inline-flex;

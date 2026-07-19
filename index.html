@@ -316,6 +316,13 @@
                   설명
                   <textarea id="classroomDescriptionInput" rows="3" placeholder="학생에게 보이는 수업방 설명"></textarea>
                 </label>
+                <label class="field-label check-field">
+                  공개 설정
+                  <span>
+                    <input id="classroomPublicInput" type="checkbox" />
+                    학생용 사이트에 공개
+                  </span>
+                </label>
                 <div class="wide classroom-member-box">
                   <div class="member-head">
                     <strong>접근 가능한 학생</strong>
@@ -396,7 +403,7 @@
         <section class="view" id="classroomStudent">
           <div class="notice">
             <strong>학생은 허용된 수업방만 볼 수 있습니다</strong>
-            <span>학생 이름을 고르고, 학생별 수업방 개인코드로 확인합니다.</span>
+            <span>수업방 관리에서 “학생용 사이트에 공개”를 체크한 수업방만 학생에게 보입니다.</span>
           </div>
 
           <section class="panel student-room-login" id="studentRoomLogin">

@@ -143,6 +143,7 @@ function normalizeClassrooms(classrooms = []) {
       name: room.name || "새 수업방",
       teacher: room.teacher || "",
       description: room.description || "",
+      isPublic: getClassroomPublicFlag(room),
       memberStudentIds,
       memberAccess: {},
       posts: (room.posts || []).map((post) => ({
@@ -162,6 +163,15 @@ function normalizeClassrooms(classrooms = []) {
     normalizedRoom.memberAccess = normalizeClassroomMemberAccess(room, memberStudentIds);
     return normalizedRoom;
   });
+}
+
+function getClassroomPublicFlag(room = {}, fallback = false) {
+  if (room.isPublic === undefined && room.visibility === undefined) return fallback;
+  return room.isPublic === true || room.visibility === "public";
+}
+
+function isClassroomPublic(room) {
+  return getClassroomPublicFlag(room);
 }
 
 function normalizeYoutubeLinks(links = [], legacyLink = "") {
@@ -405,7 +415,8 @@ function mergeImportedState(current, incoming) {
 
 function mergeClassrooms(current = [], incoming = []) {
   const map = new Map(normalizeClassrooms(current).map((room) => [room.id, room]));
-  normalizeClassrooms(incoming).forEach((room) => {
+  normalizeClassrooms(incoming).forEach((room, index) => {
+    const rawIncomingRoom = incoming[index] || {};
     const existing = map.get(room.id);
     if (!existing) {
       map.set(room.id, room);
@@ -415,6 +426,7 @@ function mergeClassrooms(current = [], incoming = []) {
     map.set(room.id, {
       ...existing,
       ...room,
+      isPublic: getClassroomPublicFlag(rawIncomingRoom, existing.isPublic),
       memberStudentIds: [...new Set([...(existing.memberStudentIds || []), ...(room.memberStudentIds || [])])],
       posts,
     });
@@ -1992,6 +2004,7 @@ function clearClassroomForm() {
   $("#classroomNameInput").value = "";
   $("#classroomTeacherInput").value = "";
   $("#classroomDescriptionInput").value = "";
+  $("#classroomPublicInput").checked = false;
   $("#classroomFormMode").textContent = "새 수업방";
   classroomMemberSelection = new Set();
   classroomMemberAccess = {};
@@ -2006,6 +2019,7 @@ function saveClassroomFromForm() {
     name: $("#classroomNameInput").value.trim(),
     teacher: $("#classroomTeacherInput").value.trim(),
     description: $("#classroomDescriptionInput").value.trim(),
+    isPublic: $("#classroomPublicInput").checked,
     memberStudentIds: getSelectedClassroomMemberIds(),
     memberAccess: getSelectedClassroomMemberAccess(),
     posts: existing?.posts || [],
@@ -2030,6 +2044,7 @@ function editClassroom(roomId) {
   $("#classroomNameInput").value = room.name;
   $("#classroomTeacherInput").value = room.teacher || "";
   $("#classroomDescriptionInput").value = room.description || "";
+  $("#classroomPublicInput").checked = isClassroomPublic(room);
   $("#classroomFormMode").textContent = "수업방 수정";
   renderClassroomMemberChecks(room.memberStudentIds || [], room.memberAccess || {});
 }
@@ -2067,7 +2082,10 @@ function renderClassroomList() {
               <div>
                 <button class="link-name-button" type="button" onclick="openClassroomPosts('${room.id}')">${room.name}</button>
                 <p>${room.description || "설명 없음"}</p>
-                <span>${room.teacher ? `담당 ${room.teacher} · ` : ""}${room.memberStudentIds.length}명 접근 · 게시글 ${room.posts.length}개</span>
+                <div class="classroom-meta-row">
+                  <span class="visibility-pill ${isClassroomPublic(room) ? "public" : ""}">${isClassroomPublic(room) ? "학생용 공개" : "비공개"}</span>
+                  <span>${room.teacher ? `담당 ${room.teacher} · ` : ""}${room.memberStudentIds.length}명 접근 · 게시글 ${room.posts.length}개</span>
+                </div>
                 <em>${memberNames || "연결된 학생 없음"}</em>
               </div>
               <div class="row-actions">
@@ -2085,7 +2103,9 @@ function renderClassroomList() {
 
 function renderPostClassroomOptions() {
   $("#postClassroomSelect").innerHTML = state.classrooms.length
-    ? sortClassroomsByName(state.classrooms).map((room) => `<option value="${room.id}">${room.name}</option>`).join("")
+    ? sortClassroomsByName(state.classrooms)
+        .map((room) => `<option value="${room.id}">${room.name}${isClassroomPublic(room) ? "" : " (비공개)"}</option>`)
+        .join("")
     : `<option value="">수업방 없음</option>`;
 }
 
@@ -2305,7 +2325,7 @@ function renderStudentClassroomView() {
 }
 
 function getAllowedClassrooms(studentId) {
-  return sortClassroomsByName(state.classrooms.filter((room) => room.memberStudentIds.includes(studentId)));
+  return sortClassroomsByName(state.classrooms.filter((room) => isClassroomPublic(room) && room.memberStudentIds.includes(studentId)));
 }
 
 function openStudentClassroom(roomId) {
@@ -2336,7 +2356,7 @@ function buildOnlineClassroomData(sourceState = state) {
 }
 
 function buildOnlineStudentFiles(sourceState = state) {
-  const classrooms = normalizeClassrooms(sourceState.classrooms || []);
+  const classrooms = normalizeClassrooms(sourceState.classrooms || []).filter((room) => isClassroomPublic(room));
   return sortStudentsByGradeName(sourceState.students || []).reduce((files, student) => {
     const code = String(student.classroomCode || "").trim().toUpperCase();
     if (!student.id || !student.name || !code) return files;
@@ -2352,6 +2372,7 @@ function buildOnlineStudentFiles(sourceState = state) {
         name: room.name,
         teacher: room.teacher || "",
         description: room.description || "",
+        isPublic: true,
         posts: getVisibleClassroomPosts(room, student.id)
           .sort((a, b) => b.createdAt - a.createdAt)
           .map((post) => ({
