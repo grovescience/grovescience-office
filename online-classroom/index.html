@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>과수원과학 수업방</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="student-app">
+      <section class="login-panel" id="loginPanel">
+        <div class="brand">
+          <img src="./assets/logo.png" alt="과수원과학 로고" />
+          <div>
+            <span>과수원과학</span>
+            <strong>학생 수업방</strong>
+          </div>
+        </div>
+        <div class="notice">
+          <strong>내 수업방만 확인할 수 있습니다</strong>
+          <span>학생 이름을 고르고, 선생님이 알려준 개인코드를 입력하세요.</span>
+        </div>
+        <label>
+          학생 이름
+          <input id="studentNameInput" autocomplete="name" placeholder="예: 김과학" />
+        </label>
+        <label>
+          수업방 개인코드
+          <input id="studentCodeInput" maxlength="8" autocomplete="one-time-code" placeholder="예: A7K29Q" />
+        </label>
+        <button id="loginBtn" type="button">입장하기</button>
+      </section>
+
+      <section class="room-shell" id="roomShell" hidden>
+        <header class="room-header">
+          <div>
+            <span>과수원과학 수업방</span>
+            <strong id="studentNameLabel"></strong>
+          </div>
+          <button id="logoutBtn" type="button">로그아웃</button>
+        </header>
+        <div class="room-layout">
+          <aside class="room-list">
+            <div class="section-title">
+              <strong>내 수업방</strong>
+              <span id="roomCountLabel">0개</span>
+            </div>
+            <div id="roomList"></div>
+          </aside>
+          <section class="post-panel">
+            <div class="section-title">
+              <strong id="roomTitle">게시글</strong>
+              <span>최신순</span>
+            </div>
+            <div id="postList"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script src="./classroom-data.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

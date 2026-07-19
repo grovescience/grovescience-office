@@ -1,0 +1,9 @@
+data/
+__pycache__/
+*.log
+*.zip
+*.lnk
+예전파일_보관/
+학생명단-복구백업.json
+과수원과학-교무실-최종본.json
+online-classroom/student-data/
