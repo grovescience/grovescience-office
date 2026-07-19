@@ -478,14 +478,29 @@
                 <label class="field-label">
                   양식
                   <select id="aiReportTemplate">
-                    <option>성장 스토리</option>
-                    <option>주간 체크</option>
-                    <option>클래식 리포트</option>
+                    <option>초등부 월간 실험 보고서</option>
+                    <option>중고등부 학기말 종합보고서</option>
                   </select>
                 </label>
                 <label class="field-label wide">
-                  쪽지시험/학습 메모
-                  <textarea id="aiReportLearningNotes" rows="4" placeholder="예: 쪽지시험 8/10, 용해도 개념은 이해했지만 그래프 해석은 추가 연습 필요"></textarea>
+                  실험 주제 / 학습내용
+                  <textarea id="aiReportLearningNotes" rows="4" placeholder="초등부 예: 물의 상태 변화 실험&#10;중고등부 예: 중2 전기와 자기, 기말 대비 오답 정리"></textarea>
+                </label>
+                <label class="field-label wide">
+                  실험 내용 / 평가 결과
+                  <textarea id="aiReportEvaluationNotes" rows="4" placeholder="초등부 예: 얼음이 녹는 과정과 온도 변화를 관찰하고 기록함&#10;중고등부 예: 지난 평가 78점, 이번 평가 92점, 계산 실수 감소"></textarea>
+                </label>
+                <label class="field-label">
+                  출석률
+                  <input id="aiReportAttendanceRate" placeholder="예: 8회 중 7회 / 95%" />
+                </label>
+                <label class="field-label">
+                  과제 수행상태
+                  <input id="aiReportHomeworkStatus" placeholder="예: 4회 모두 완료 / 90%" />
+                </label>
+                <label class="field-label wide">
+                  수업 사진 설명
+                  <textarea id="aiReportPhotoMemo" rows="3" placeholder="초등부 사진에 넣을 설명: 실험 장면, 결과물, 관찰 기록 등"></textarea>
                 </label>
                 <label class="field-label wide">
                   선생님 코멘트

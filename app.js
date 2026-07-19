@@ -613,6 +613,10 @@ function bindEvents() {
   $("#saveClassHomeworkBtn").addEventListener("click", saveClassHomework);
   $("#copyClassHomeworkBtn").addEventListener("click", copyClassHomeworkMessage);
   $("#aiReportStudent").addEventListener("change", fillAiReportDefaults);
+  $("#aiReportTemplate").addEventListener("change", (event) => {
+    event.currentTarget.dataset.touched = "true";
+    fillAiReportDefaults();
+  });
   $("#generateAiReportBtn").addEventListener("click", generateAiReport);
   $("#copyAiReportBtn").addEventListener("click", copyAiReport);
   $("#downloadAiReportBtn").addEventListener("click", downloadAiReport);
@@ -1489,6 +1493,10 @@ function fillAiReportDefaults() {
     if (status) status.textContent = "학생 없음";
     return;
   }
+  const template = $("#aiReportTemplate");
+  if (template && !template.dataset.touched) {
+    template.value = String(student.grade || "").startsWith("초") ? "초등부 월간 실험 보고서" : "중고등부 학기말 종합보고서";
+  }
   if (status) status.textContent = `${student.name} 학생 선택됨`;
 }
 
@@ -1514,6 +1522,14 @@ async function generateAiReport() {
         template: $("#aiReportTemplate").value,
         student: getAiReportStudentPayload(student),
         attendanceSummary: getStudentAttendanceSummary(student.id),
+        reportInputs: {
+          learningNotes: $("#aiReportLearningNotes").value.trim(),
+          evaluationNotes: $("#aiReportEvaluationNotes").value.trim(),
+          attendanceRate: $("#aiReportAttendanceRate").value.trim(),
+          homeworkStatus: $("#aiReportHomeworkStatus").value.trim(),
+          photoMemo: $("#aiReportPhotoMemo").value.trim(),
+          teacherComment: $("#aiReportTeacherComment").value.trim(),
+        },
         learningNotes: $("#aiReportLearningNotes").value.trim(),
         teacherComment: $("#aiReportTeacherComment").value.trim(),
       }),
