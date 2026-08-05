@@ -1021,7 +1021,12 @@ function dateKey(date) {
 
 function extractScheduleTime(value) {
   const match = String(value || "").match(/(?:^|\s)([01]?\d|2[0-3]):([0-5]\d)/);
-  return match ? `${String(match[1]).padStart(2, "0")}:${match[2]}` : "";
+  if (!match) return "";
+  let hour = Number(match[1]);
+  const text = String(value || "");
+  if (text.includes("오후") && hour < 12) hour += 12;
+  if (text.includes("오전") && hour === 12) hour = 0;
+  return `${String(hour).padStart(2, "0")}:${match[2]}`;
 }
 
 function scheduleSortValue(item) {
@@ -1137,7 +1142,10 @@ function fillClassEditForm() {
   $("#classNameInput").value = classInfo.name;
   $("#classNameInput").readOnly = true;
   $("#classTypeInput").value = classInfo.type || "정규반";
-  $("#classTimeInput").value = classInfo.time || "";
+  const savedClassTime = String(classInfo.time || "");
+  const savedHour = Number(savedClassTime.match(/([01]?\d|2[0-3]):[0-5]\d/)?.[1] || 0);
+  $("#classPeriodInput").value = savedClassTime.includes("오전") ? "오전" : savedClassTime.includes("오후") ? "오후" : savedHour >= 12 ? "오후" : "오전";
+  $("#classTimeInput").value = savedClassTime.replace(/^(오전|오후)\s*/, "");
   $("#classFrequencyInput").value = classInfo.frequency || "";
   $("#classSubjectInput").value = classInfo.subject || subjectChoices[0];
   $("#classBookInput").value = classInfo.defaultBook || "";
@@ -1150,6 +1158,7 @@ function startNewClassForm(clearSelect = true) {
   $("#classNameInput").value = "";
   $("#classNameInput").readOnly = false;
   $("#classTypeInput").value = "정규반";
+  $("#classPeriodInput").value = "오후";
   $("#classTimeInput").value = "";
   $("#classFrequencyInput").value = "주 1회";
   $("#classSubjectInput").value = "교과과학";
@@ -1171,10 +1180,12 @@ function saveClassInfoFromForm() {
     alert("이미 같은 이름의 반이 있습니다.");
     return;
   }
+  const rawClassTime = $("#classTimeInput").value.trim().replace(/^(오전|오후)\s*/, "");
+  const savedClassTime = rawClassTime ? `${$("#classPeriodInput").value} ${rawClassTime}` : current?.time || "";
   const savedClassInfo = {
     name: className,
     type: $("#classTypeInput").value || current?.type || "정규반",
-    time: $("#classTimeInput").value.trim() || current?.time || "",
+    time: savedClassTime,
     frequency: $("#classFrequencyInput").value.trim() || current?.frequency || "주 1회",
     subject: $("#classSubjectInput").value || current?.subject || "교과과학",
     defaultBook: $("#classBookInput").value.trim() || current?.defaultBook || "",
