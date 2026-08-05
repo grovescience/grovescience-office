@@ -44,6 +44,7 @@
           <button class="nav-item" data-view="payments">납부관리</button>
           <button class="nav-item" data-view="books">교재관리</button>
           <button class="nav-item" data-view="homework">숙제관리</button>
+          <button class="nav-item" data-view="scores">성적관리</button>
           <button class="nav-item" data-view="classroomAdmin">수업방 관리</button>
           <button class="nav-item" data-view="classroomStudent">과수원ON 미리보기</button>
           <button class="nav-item" data-view="aiReports">AI 보고서</button>
@@ -73,7 +74,7 @@
             <h1 id="pageTitle">대시보드</h1>
           </div>
           <div class="top-actions">
-            <button class="ghost-button" id="officeLogoutBtn" type="button" hidden>로그아웃</button>
+            <button class="logout-button" id="officeLogoutBtn" type="button" hidden>관리자 로그아웃</button>
             <button class="ghost-button" id="exportDataBtn" data-export-data type="button">자료 백업</button>
             <button class="ghost-button" id="exportOnlineClassroomBtn" type="button">과수원ON 백업파일 만들기</button>
             <button class="ghost-button" id="bulkStudentAccountsBtn" type="button">학생 아이디 일괄 발급</button>
@@ -622,6 +623,55 @@
           </section>
         </section>
 
+        <section class="view" id="scores">
+          <div class="notice">
+            <strong>학생별 시험 성적을 기록하고 한눈에 비교합니다</strong>
+            <span>학교 시험은 100점 점수로, 학원 시험은 전체 문항과 맞힌 개수로 입력하면 자동 환산됩니다.</span>
+          </div>
+          <section class="panel score-editor-panel">
+            <div class="panel-heading">
+              <h2>시험 성적 입력</h2>
+              <span>반을 고르면 해당 학생이 자동으로 표시됩니다.</span>
+            </div>
+            <input id="scoreExamId" type="hidden" />
+            <div class="score-exam-form">
+              <label>시험 구분
+                <select id="scoreExamType"><option value="school">학교 시험</option><option value="academy">학원내 시험</option></select>
+              </label>
+              <label>시험일
+                <input id="scoreExamDate" type="date" />
+              </label>
+              <label>시험명
+                <input id="scoreExamTitle" placeholder="예: 1학기 중간고사" />
+              </label>
+              <label>반
+                <select id="scoreExamClass"></select>
+              </label>
+              <label>과목
+                <input id="scoreExamSubject" placeholder="예: 과학" />
+              </label>
+              <label id="scoreTotalQuestionsWrap" hidden>전체 문항 수
+                <input id="scoreExamTotalQuestions" type="number" min="1" step="1" placeholder="예: 25" />
+              </label>
+            </div>
+            <div class="score-student-inputs" id="scoreStudentInputs"></div>
+            <div class="score-form-actions">
+              <button class="primary-button" id="saveScoreExamBtn" type="button">시험 성적 저장</button>
+              <button class="ghost-button" id="clearScoreExamBtn" type="button">새 시험 입력</button>
+            </div>
+          </section>
+          <div class="score-columns">
+            <section class="panel">
+              <div class="panel-heading"><h2>학교 시험</h2><span>학생별 점수 그래프</span></div>
+              <div class="score-exam-list" id="schoolExamList"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-heading"><h2>학원내 시험</h2><span>정답 개수 · 100점 환산</span></div>
+              <div class="score-exam-list" id="academyExamList"></div>
+            </section>
+          </div>
+        </section>
+
         <section class="view" id="consulting">
           <div class="notice">
             <strong>기존 학생 상담과 신규 상담을 나눠 기록합니다</strong>
@@ -745,6 +795,14 @@
 
       </main>
     </div>
+
+    <dialog id="scoreRankingDialog" class="score-ranking-dialog">
+      <div class="dialog-heading">
+        <div><h2 id="scoreRankingTitle">시험 성적</h2><p id="scoreRankingSummary"></p></div>
+        <button class="icon-button" id="closeScoreRankingBtn" aria-label="닫기" type="button">×</button>
+      </div>
+      <div id="scoreRankingList"></div>
+    </dialog>
 
     <dialog id="studentDialog">
       <form method="dialog" id="studentForm">

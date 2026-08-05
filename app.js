@@ -69,6 +69,7 @@ function createInitialState() {
     customClasses: [],
     classrooms: [],
     scheduleEvents: [],
+    scoreExams: [],
   };
 }
 
@@ -87,9 +88,11 @@ function normalizeState(saved) {
     customClasses: [],
     classrooms: [],
     scheduleEvents: [],
+    scoreExams: [],
     ...saved,
   };
   next.customClasses = normalizeCustomClasses(next.customClasses);
+  next.scoreExams = Array.isArray(next.scoreExams) ? next.scoreExams : [];
   next.classSettings = normalizeClassSettings(next.classSettings, next.customClasses);
   next.students = (next.students || []).map((student) => {
     const classInfo = getClassInfo(student.className);
@@ -654,6 +657,8 @@ function setup() {
   $("#leadDate").value = today();
   $("#waitDate").value = today();
   $("#classHomeworkDate").value = today();
+  $("#scoreExamDate").value = today();
+  $("#scoreExamClass").innerHTML = classOptions();
   $("#classFilter").innerHTML = classOptions(true);
   $("#attendanceClass").innerHTML = classOptions();
   $("#homeworkClass").innerHTML = classOptions(true);
@@ -746,6 +751,12 @@ function bindEvents() {
   $("#studentRoomLogoutBtn").addEventListener("click", logoutStudentRoom);
   $("#exportOnlineClassroomBtn").addEventListener("click", exportOnlineClassroom);
   $("#bulkStudentAccountsBtn").addEventListener("click", provisionAllStudentAccounts);
+  $("#scoreExamType").addEventListener("change", () => { syncScoreExamForm(); renderScoreStudentInputs(); });
+  $("#scoreExamClass").addEventListener("change", renderScoreStudentInputs);
+  $("#scoreExamTotalQuestions").addEventListener("input", updateAcademyScorePreviews);
+  $("#saveScoreExamBtn").addEventListener("click", saveScoreExam);
+  $("#clearScoreExamBtn").addEventListener("click", clearScoreExamForm);
+  $("#closeScoreRankingBtn").addEventListener("click", () => $("#scoreRankingDialog").close());
   $("#closeMemberDialogBtn").addEventListener("click", () => $("#memberDialog").close());
   $("#calendarPrevBtn").addEventListener("click", () => { calendarCursor.setMonth(calendarCursor.getMonth() - 1); renderScheduleCalendar(); });
   $("#calendarNextBtn").addEventListener("click", () => { calendarCursor.setMonth(calendarCursor.getMonth() + 1); renderScheduleCalendar(); });
@@ -791,6 +802,148 @@ function renderAll() {
   renderClassroomStudentOptions();
   renderClassrooms();
   renderStudentClassroomView();
+  renderScoreExams();
+}
+
+function scoreEscape(value) {
+  return String(value ?? "").replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '\"': "&quot;" }[char]));
+}
+
+function scoreStudentsForClass(className) {
+  return (state.students || [])
+    .filter((student) => student.status === "재원" && studentBelongsToClass(student, className))
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+}
+
+function scorePercent(exam, result) {
+  if (exam.type === "academy") {
+    const total = Number(exam.totalQuestions) || 0;
+    return total ? Math.round((Number(result.correctCount) / total) * 1000) / 10 : 0;
+  }
+  return Math.max(0, Math.min(100, Number(result.score) || 0));
+}
+
+function syncScoreExamForm() {
+  const academy = $("#scoreExamType").value === "academy";
+  $("#scoreTotalQuestionsWrap").hidden = !academy;
+}
+
+function renderScoreStudentInputs(existingResults = null) {
+  const container = $("#scoreStudentInputs");
+  if (!container) return;
+  const type = $("#scoreExamType").value;
+  const students = scoreStudentsForClass($("#scoreExamClass").value);
+  const stored = existingResults || [];
+  if (!students.length) {
+    container.innerHTML = '<p class="empty-state">선택한 반의 재원생이 없습니다.</p>';
+    return;
+  }
+  container.innerHTML = students.map((student) => {
+    const result = stored.find((item) => item.studentId === student.id) || {};
+    const value = type === "academy" ? (result.correctCount ?? "") : (result.score ?? "");
+    return `<label class="score-student-row"><strong>${scoreEscape(student.name)}</strong><span>${scoreEscape(student.grade || "")} · ${scoreEscape(student.school || "")}</span><input class="score-value-input" data-student-id="${scoreEscape(student.id)}" type="number" min="0" step="${type === "academy" ? "1" : "0.1"}" value="${scoreEscape(value)}" placeholder="${type === "academy" ? "맞힌 개수" : "점수"}"><em class="score-converted"></em></label>`;
+  }).join("");
+  Array.from(container.querySelectorAll(".score-value-input")).forEach((input) => input.addEventListener("input", updateAcademyScorePreviews));
+  updateAcademyScorePreviews();
+}
+
+function updateAcademyScorePreviews() {
+  const academy = $("#scoreExamType")?.value === "academy";
+  const total = Number($("#scoreExamTotalQuestions")?.value) || 0;
+  Array.from($("#scoreStudentInputs").querySelectorAll(".score-student-row")).forEach((row) => {
+    const value = Number(row.querySelector("input").value);
+    const preview = row.querySelector(".score-converted");
+    preview.textContent = academy && total && Number.isFinite(value) ? `${value}/${total} · ${Math.round(value / total * 1000) / 10}점` : "";
+  });
+}
+
+function clearScoreExamForm() {
+  $("#scoreExamId").value = "";
+  $("#scoreExamType").value = "school";
+  $("#scoreExamDate").value = today();
+  $("#scoreExamTitle").value = "";
+  $("#scoreExamSubject").value = "";
+  $("#scoreExamTotalQuestions").value = "";
+  syncScoreExamForm();
+  renderScoreStudentInputs();
+}
+
+function saveScoreExam() {
+  const type = $("#scoreExamType").value;
+  const title = $("#scoreExamTitle").value.trim();
+  const className = $("#scoreExamClass").value;
+  const totalQuestions = Number($("#scoreExamTotalQuestions").value);
+  if (!title || !className) return alert("시험명과 반을 입력해주세요.");
+  if (type === "academy" && (!Number.isInteger(totalQuestions) || totalQuestions < 1)) return alert("학원내 시험의 전체 문항 수를 입력해주세요.");
+  const results = Array.from($("#scoreStudentInputs").querySelectorAll(".score-value-input")).filter((input) => input.value !== "").map((input) => {
+    const value = Number(input.value);
+    return type === "academy" ? { studentId: input.dataset.studentId, correctCount: value } : { studentId: input.dataset.studentId, score: value };
+  });
+  if (!results.length) return alert("학생 한 명 이상의 성적을 입력해주세요.");
+  if (type === "school" && results.some((item) => item.score < 0 || item.score > 100)) return alert("학교 시험 점수는 0점부터 100점까지 입력해주세요.");
+  if (type === "academy" && results.some((item) => item.correctCount < 0 || item.correctCount > totalQuestions || !Number.isInteger(item.correctCount))) return alert(`맞힌 개수는 0개부터 ${totalQuestions}개까지 정수로 입력해주세요.`);
+  const id = $("#scoreExamId").value || crypto.randomUUID();
+  const old = (state.scoreExams || []).find((exam) => exam.id === id);
+  const exam = { id, type, title, date: $("#scoreExamDate").value || today(), className, subject: $("#scoreExamSubject").value.trim(), totalQuestions: type === "academy" ? totalQuestions : null, results, createdAt: old?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+  state.scoreExams = [...(state.scoreExams || []).filter((item) => item.id !== id), exam];
+  saveState();
+  renderScoreExams();
+  clearScoreExamForm();
+  alert("시험 성적을 저장했습니다.");
+}
+
+function scoreResultName(result) {
+  return (state.students || []).find((student) => student.id === result.studentId)?.name || "학생";
+}
+
+function renderScoreExamCard(exam) {
+  const sorted = [...(exam.results || [])].sort((a, b) => scorePercent(exam, b) - scorePercent(exam, a));
+  const average = sorted.length ? Math.round(sorted.reduce((sum, result) => sum + scorePercent(exam, result), 0) / sorted.length * 10) / 10 : 0;
+  const bars = exam.type === "school" ? `<div class="score-mini-chart">${sorted.slice(0, 8).map((result) => { const percent = scorePercent(exam, result); return `<div><span>${scoreEscape(scoreResultName(result))}</span><i><b style="width:${percent}%"></b></i><strong>${percent}점</strong></div>`; }).join("")}</div>` : `<div class="score-academy-summary">${sorted.slice(0, 5).map((result) => `<span>${scoreEscape(scoreResultName(result))} ${result.correctCount}/${exam.totalQuestions} · ${scorePercent(exam, result)}점</span>`).join("")}</div>`;
+  return `<article class="score-exam-card" onclick="openScoreRanking('${exam.id}')"><div class="score-card-heading"><div><small>${scoreEscape(exam.date)} · ${scoreEscape(exam.className)}${exam.subject ? ` · ${scoreEscape(exam.subject)}` : ""}</small><h3>${scoreEscape(exam.title)}</h3></div><strong>평균 ${average}점</strong></div>${bars}<div class="score-card-actions"><button type="button" onclick="event.stopPropagation(); editScoreExam('${exam.id}')">수정</button><button type="button" class="danger-text" onclick="event.stopPropagation(); deleteScoreExam('${exam.id}')">삭제</button><span>눌러서 전체 순위 보기</span></div></article>`;
+}
+
+function renderScoreExams() {
+  if (!$("#schoolExamList")) return;
+  const exams = [...(state.scoreExams || [])].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  ["school", "academy"].forEach((type) => {
+    const target = type === "school" ? $("#schoolExamList") : $("#academyExamList");
+    const items = exams.filter((exam) => exam.type === type);
+    target.innerHTML = items.length ? items.map(renderScoreExamCard).join("") : '<p class="empty-state">아직 저장한 시험이 없습니다.</p>';
+  });
+}
+
+function editScoreExam(id) {
+  const exam = (state.scoreExams || []).find((item) => item.id === id);
+  if (!exam) return;
+  $("#scoreExamId").value = exam.id;
+  $("#scoreExamType").value = exam.type;
+  $("#scoreExamDate").value = exam.date;
+  $("#scoreExamTitle").value = exam.title;
+  $("#scoreExamClass").value = exam.className;
+  $("#scoreExamSubject").value = exam.subject || "";
+  $("#scoreExamTotalQuestions").value = exam.totalQuestions || "";
+  syncScoreExamForm();
+  renderScoreStudentInputs(exam.results || []);
+  $("#scores").scrollIntoView({ behavior: "smooth" });
+}
+
+function deleteScoreExam(id) {
+  const exam = (state.scoreExams || []).find((item) => item.id === id);
+  if (!exam || !confirm(`${exam.title} 시험 기록을 삭제할까요?`)) return;
+  state.scoreExams = state.scoreExams.filter((item) => item.id !== id);
+  saveState();
+  renderScoreExams();
+}
+
+function openScoreRanking(id) {
+  const exam = (state.scoreExams || []).find((item) => item.id === id);
+  if (!exam) return;
+  const sorted = [...(exam.results || [])].sort((a, b) => scorePercent(exam, b) - scorePercent(exam, a));
+  $("#scoreRankingTitle").textContent = exam.title;
+  $("#scoreRankingSummary").textContent = `${exam.date} · ${exam.className}${exam.subject ? ` · ${exam.subject}` : ""} · 고득점순`;
+  $("#scoreRankingList").innerHTML = `<div class="score-ranking-list">${sorted.map((result, index) => `<div><b>${index + 1}</b><strong>${scoreEscape(scoreResultName(result))}</strong><span>${exam.type === "academy" ? `${result.correctCount}/${exam.totalQuestions}개 정답` : "학교 시험"}</span><em>${scorePercent(exam, result)}점</em></div>`).join("")}</div>`;
+  $("#scoreRankingDialog").showModal();
 }
 
 function getSavedSchoolNames() {
@@ -3097,4 +3250,7 @@ window.openClassroomStudentList = openClassroomStudentList;
 window.editClassroomPost = editClassroomPost;
 window.deleteClassroomPost = deleteClassroomPost;
 window.openStudentClassroom = openStudentClassroom;
+window.editScoreExam = editScoreExam;
+window.deleteScoreExam = deleteScoreExam;
+window.openScoreRanking = openScoreRanking;
 window.startOrchardOffice = setup;
