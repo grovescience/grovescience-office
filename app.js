@@ -2804,7 +2804,7 @@ function renderStudentClassroomPosts() {
 function buildOnlineClassroomData(sourceState = state) {
   return {
     academyName: "과수원과학",
-    title: "과수원과학 수업방",
+    title: "과수원ON",
     exportedAt: new Date().toISOString(),
     loginMode: "student-code-files",
   };
