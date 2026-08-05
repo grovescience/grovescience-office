@@ -1,0 +1,23 @@
+과수원과학 교무실 온라인 연결 설정 안내
+
+Vercel 환경변수 3개는 이름을 바꾸거나 삭제하지 마세요.
+
+1. SUPABASE_URL
+   - Supabase 프로젝트 주소
+   - 관리자·학생 사이트가 어느 데이터베이스에 연결할지 알려줍니다.
+
+2. SUPABASE_PUBLISHABLE_KEY
+   - 로그인 화면과 일반 사용자 연결용 공개 키
+   - 학생과 관리자가 로그인할 때 사용합니다.
+
+3. SUPABASE_SECRET_KEY
+   - 학생 계정 발급과 온라인 자료 저장을 위한 서버 전용 비밀 키
+   - 채팅, 메일, 문서, GitHub에 값을 복사하지 마세요.
+   - Vercel의 Sensitive 상태로만 보관합니다.
+
+기억하기
+- URL = 주소
+- PUBLISHABLE = 로그인 연결용
+- SECRET = 서버 전용, 절대 공유 금지
+
+세 항목 모두 Production and Preview에 적용합니다.
