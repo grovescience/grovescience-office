@@ -152,7 +152,8 @@ function normalizeState(saved) {
   next.classrooms = normalizeClassrooms(next.classrooms);
   next.scheduleEvents = (next.scheduleEvents || []).map((event) => ({
     id: event.id || crypto.randomUUID(), date: event.date || today(), type: event.type || "학원 행사",
-    title: event.title || "", memo: event.memo || "", createdAt: event.createdAt || Date.now(),
+    title: event.title || "", memo: event.memo || "", time: event.time || "",
+    moveToDate: event.moveToDate || "", moveToTime: event.moveToTime || "", createdAt: event.createdAt || Date.now(),
   }));
   return next;
 }
@@ -673,6 +674,7 @@ function setup() {
   syncAttendanceRoundControl();
   renderClassroomStudentOptions();
   renderYoutubeLinkRows([]);
+  syncScheduleMoveFields();
 
   bindEvents();
   renderAll();
@@ -764,6 +766,7 @@ function bindEvents() {
   $("#calendarNextBtn").addEventListener("click", () => { calendarCursor.setMonth(calendarCursor.getMonth() + 1); renderScheduleCalendar(); });
   $("#calendarTodayBtn").addEventListener("click", () => { calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1); selectScheduleDate(today()); });
   $("#addScheduleBtn").addEventListener("click", addScheduleEvent);
+  $("#scheduleTypeInput").addEventListener("change", syncScheduleMoveFields);
 
   $("#studentForm").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -1016,6 +1019,41 @@ function dateKey(date) {
   return `${y}-${m}-${d}`;
 }
 
+function extractScheduleTime(value) {
+  const match = String(value || "").match(/(?:^|\s)([01]?\d|2[0-3]):([0-5]\d)/);
+  return match ? `${String(match[1]).padStart(2, "0")}:${match[2]}` : "";
+}
+
+function scheduleSortValue(item) {
+  return item.time || "99:99";
+}
+
+function scheduleItemsForDate(dateValue) {
+  const date = new Date(`${dateValue}T00:00:00`);
+  const weekday = "일월화수목금토"[date.getDay()];
+  const classItems = classes
+    .filter((item) => getClassWeekdays(item).includes(weekday))
+    .map((item) => ({ kind: "class", type: "수업", title: item.name, time: extractScheduleTime(item.time), memo: item.time || "" }));
+  const directEvents = state.scheduleEvents
+    .filter((item) => item.date === dateValue)
+    .map((item) => ({ ...item, kind: "event" }));
+  const movedEvents = state.scheduleEvents
+    .filter((item) => item.moveToDate === dateValue)
+    .map((item) => ({ ...item, kind: "makeup", type: "보강", time: item.moveToTime || item.time || "", title: `${item.title} 보강`, memo: `${item.date} 수업에서 이동` }));
+  return [...classItems, ...directEvents, ...movedEvents].sort((a, b) => scheduleSortValue(a).localeCompare(scheduleSortValue(b), "ko") || a.title.localeCompare(b.title, "ko"));
+}
+
+function scheduleMoveText(item) {
+  if (!item.moveToDate) return "";
+  const [, month, day] = item.moveToDate.split("-");
+  return ` → ${Number(month)}.${Number(day)}${item.moveToTime ? ` ${item.moveToTime}` : ""} 보강`;
+}
+
+function syncScheduleMoveFields() {
+  const type = $("#scheduleTypeInput")?.value || "";
+  $("#scheduleMoveFields").hidden = !["휴강", "수업 취소"].includes(type);
+}
+
 function renderScheduleCalendar() {
   const year = calendarCursor.getFullYear(), month = calendarCursor.getMonth();
   $("#calendarMonthLabel").textContent = `${year}년 ${month + 1}월`;
@@ -1023,10 +1061,9 @@ function renderScheduleCalendar() {
   const cells = ["일", "월", "화", "수", "목", "금", "토"].map((day) => `<div class="calendar-weekday">${day}</div>`);
   for (let i = 0; i < first.getDay(); i += 1) cells.push(`<div class="calendar-day outside"></div>`);
   for (let day = 1; day <= lastDate; day += 1) {
-    const date = new Date(year, month, day), key = dateKey(date), weekday = "일월화수목금토"[date.getDay()];
-    const classItems = classes.filter((item) => getClassWeekdays(item).includes(weekday));
-    const events = state.scheduleEvents.filter((item) => item.date === key);
-    cells.push(`<button class="calendar-day ${key === today() ? "today" : ""} ${key === selectedScheduleDate ? "selected" : ""}" type="button" onclick="selectScheduleDate('${key}')"><span>${day}</span>${classItems.slice(0, 2).map((item) => `<small class="calendar-class">${item.name}</small>`).join("")}${events.slice(0, 2).map((item) => `<small class="calendar-event">${item.title}</small>`).join("")}${classItems.length + events.length > 4 ? `<small>+${classItems.length + events.length - 4}</small>` : ""}</button>`);
+    const date = new Date(year, month, day), key = dateKey(date);
+    const items = scheduleItemsForDate(key);
+    cells.push(`<button class="calendar-day ${key === today() ? "today" : ""} ${key === selectedScheduleDate ? "selected" : ""}" type="button" onclick="selectScheduleDate('${key}')"><span>${day}</span>${items.slice(0, 5).map((item) => `<small class="${item.kind === "class" ? "calendar-class" : item.kind === "makeup" ? "calendar-makeup" : ["학원 휴무", "학원 방학", "휴강", "수업 취소"].includes(item.type) ? "calendar-closed" : "calendar-event"}">${item.time ? `${item.time} ` : ""}${item.title}${item.kind === "event" ? scheduleMoveText(item) : ""}</small>`).join("")}${items.length > 5 ? `<small class="calendar-more">+${items.length - 5}개 더보기</small>` : ""}</button>`);
   }
   $("#academyCalendar").innerHTML = cells.join("");
   renderScheduleAgenda();
@@ -1043,8 +1080,11 @@ function selectScheduleDate(value) {
 function addScheduleEvent() {
   const date = $("#scheduleDateInput").value, title = $("#scheduleTitleInput").value.trim();
   if (!date || !title) return alert("일자와 일정명을 입력해주세요.");
-  state.scheduleEvents.push({ id: crypto.randomUUID(), date, type: $("#scheduleTypeInput").value, title, memo: $("#scheduleMemoInput").value.trim(), createdAt: Date.now() });
-  $("#scheduleTitleInput").value = ""; $("#scheduleMemoInput").value = ""; selectedScheduleDate = date;
+  const type = $("#scheduleTypeInput").value;
+  const moveToDate = ["휴강", "수업 취소"].includes(type) ? $("#scheduleMoveDateInput").value : "";
+  if (moveToDate && moveToDate === date) return alert("보강일은 기존 수업일과 다른 날짜로 선택해주세요.");
+  state.scheduleEvents.push({ id: crypto.randomUUID(), date, type, title, time: $("#scheduleTimeInput").value, memo: $("#scheduleMemoInput").value.trim(), moveToDate, moveToTime: moveToDate ? $("#scheduleMoveTimeInput").value : "", createdAt: Date.now() });
+  $("#scheduleTitleInput").value = ""; $("#scheduleMemoInput").value = ""; $("#scheduleTimeInput").value = ""; $("#scheduleMoveDateInput").value = ""; $("#scheduleMoveTimeInput").value = ""; selectedScheduleDate = date;
   saveState(); renderScheduleCalendar();
 }
 
@@ -1055,10 +1095,8 @@ function deleteScheduleEvent(id) {
 }
 
 function renderScheduleAgenda() {
-  const date = new Date(`${selectedScheduleDate}T00:00:00`), weekday = "일월화수목금토"[date.getDay()];
-  const classItems = classes.filter((item) => getClassWeekdays(item).includes(weekday));
-  const events = state.scheduleEvents.filter((item) => item.date === selectedScheduleDate);
-  $("#scheduleAgenda").innerHTML = `<h3>${selectedScheduleDate} 일정</h3>` + (classItems.map((item) => `<article><span class="badge">수업</span><strong>${item.name}</strong><small>${item.time}</small></article>`).join("") + events.map((item) => `<article><span class="badge orange">${item.type}</span><strong>${item.title}</strong><small>${item.memo || ""}</small><button class="mini-button danger" type="button" onclick="deleteScheduleEvent('${item.id}')">삭제</button></article>`).join("") || `<div class="empty-state">등록된 일정이 없습니다.</div>`);
+  const items = scheduleItemsForDate(selectedScheduleDate);
+  $("#scheduleAgenda").innerHTML = `<h3>${selectedScheduleDate} 일정 · 시간순</h3>` + (items.map((item) => `<article class="schedule-agenda-${item.kind}"><span class="badge ${item.kind === "class" ? "" : "orange"}">${item.type}</span><time>${item.time || "시간 미정"}</time><strong>${item.title}${item.kind === "event" ? scheduleMoveText(item) : ""}</strong><small>${item.memo || ""}</small>${item.kind === "event" ? `<button class="mini-button danger" type="button" onclick="deleteScheduleEvent('${item.id}')">삭제</button>` : ""}</article>`).join("") || `<div class="empty-state">등록된 일정이 없습니다.</div>`);
 }
 
 function openDashboardStudents() {
