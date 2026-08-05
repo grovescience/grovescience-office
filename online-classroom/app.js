@@ -56,6 +56,12 @@ function formatLessonDate(value) {
   return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" }).format(new Date(`${value}T00:00:00`));
 }
 
+function getClassroomLinkLabel(link, index = 0) {
+  const title = link.title || `수업 링크 ${index + 1}`;
+  const url = String(link.url || "");
+  return /(?:youtube\.com|youtu\.be)/i.test(url) ? `${title} (유튜브 링크 바로가기)` : title;
+}
+
 async function setup() {
   $("#loginBtn").addEventListener("click", login);
   $("#logoutBtn").addEventListener("click", logout);
@@ -191,7 +197,7 @@ function renderPost(post) {
           .map(
             (link, index) => `
               <a class="classroom-link" href="${link.url}" target="_blank" rel="noreferrer">
-                <span>${link.title || `수업 링크 ${index + 1}`}</span>
+                <span>${getClassroomLinkLabel(link, index)}</span>
                 <small>열기</small>
               </a>
             `,

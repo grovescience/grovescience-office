@@ -2498,6 +2498,12 @@ function getYoutubeLinksFromForm() {
     .filter((link) => link.url);
 }
 
+function getClassroomLinkLabel(link, index = 0) {
+  const title = link.title || `수업 링크 ${index + 1}`;
+  const url = String(link.url || "");
+  return /(?:youtube\.com|youtu\.be)/i.test(url) ? `${title} (유튜브 링크 바로가기)` : title;
+}
+
 function saveClassroomPostFromForm() {
   const roomId = $("#postClassroomSelect").value;
   const room = state.classrooms.find((item) => item.id === roomId);
@@ -2575,7 +2581,7 @@ function renderClassroomPostCard(roomId, post, editable = false) {
           .map(
             (link, index) => `
               <a class="classroom-link" href="${link.url}" target="_blank" rel="noreferrer">
-                <span>${link.title || `수업 링크 ${index + 1}`}</span>
+                <span>${getClassroomLinkLabel(link, index)}</span>
                 <small>열기</small>
               </a>
             `,
