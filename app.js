@@ -658,6 +658,7 @@ function setup() {
   $("#waitDate").value = today();
   $("#classHomeworkDate").value = today();
   $("#scoreExamDate").value = today();
+  $("#scoreExamSubject").value = "과학";
   $("#scoreExamClass").innerHTML = classOptions();
   $("#classFilter").innerHTML = classOptions(true);
   $("#attendanceClass").innerHTML = classOptions();
@@ -753,7 +754,7 @@ function bindEvents() {
   $("#exportOnlineClassroomBtn").addEventListener("click", exportOnlineClassroom);
   $("#bulkStudentAccountsBtn").addEventListener("click", provisionAllStudentAccounts);
   $("#scoreExamType").addEventListener("change", () => { syncScoreExamForm(); renderScoreStudentInputs(); });
-  $("#scoreExamClass").addEventListener("change", renderScoreStudentInputs);
+  $("#scoreExamClass").addEventListener("change", () => renderScoreStudentInputs());
   $("#scoreExamTotalQuestions").addEventListener("input", updateAcademyScorePreviews);
   $("#saveScoreExamBtn").addEventListener("click", saveScoreExam);
   $("#clearScoreExamBtn").addEventListener("click", clearScoreExamForm);
@@ -863,7 +864,7 @@ function clearScoreExamForm() {
   $("#scoreExamType").value = "school";
   $("#scoreExamDate").value = today();
   $("#scoreExamTitle").value = "";
-  $("#scoreExamSubject").value = "";
+  $("#scoreExamSubject").value = "과학";
   $("#scoreExamTotalQuestions").value = "";
   syncScoreExamForm();
   renderScoreStudentInputs();
@@ -922,7 +923,7 @@ function editScoreExam(id) {
   $("#scoreExamDate").value = exam.date;
   $("#scoreExamTitle").value = exam.title;
   $("#scoreExamClass").value = exam.className;
-  $("#scoreExamSubject").value = exam.subject || "";
+  $("#scoreExamSubject").value = exam.subject || "과학";
   $("#scoreExamTotalQuestions").value = exam.totalQuestions || "";
   syncScoreExamForm();
   renderScoreStudentInputs(exam.results || []);
