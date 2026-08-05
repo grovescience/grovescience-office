@@ -2384,6 +2384,7 @@ function editClassroom(roomId) {
   $("#classroomPublicInput").checked = isClassroomPublic(room);
   $("#classroomFormMode").textContent = "수업방 수정";
   renderClassroomMemberChecks(room.memberStudentIds || [], room.memberAccess || {});
+  $("#classroomEditorPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function deleteClassroom(roomId) {
@@ -2417,7 +2418,7 @@ function renderClassroomList() {
           return `
             <article class="classroom-card">
               <div>
-                <button class="link-name-button" type="button" onclick="openClassroomPosts('${room.id}')">${room.name}</button>
+                <button class="link-name-button" type="button" onclick="editClassroom('${room.id}')">${room.name}</button>
                 <p>${room.description || "설명 없음"}</p>
                 <div class="classroom-meta-row">
                   <span class="visibility-pill ${isClassroomPublic(room) ? "public" : ""}">${isClassroomPublic(room) ? "학생용 공개" : "비공개"}</span>

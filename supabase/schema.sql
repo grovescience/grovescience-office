@@ -47,3 +47,6 @@ revoke all on public.student_portals from anon;
 grant select, insert, update, delete on public.office_state to authenticated;
 grant select on public.student_profiles to authenticated;
 grant select on public.student_portals to authenticated;
+grant select, insert, update, delete on public.office_state to service_role;
+grant select, insert, update, delete on public.student_profiles to service_role;
+grant select, insert, update, delete on public.student_portals to service_role;
