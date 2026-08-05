@@ -33,6 +33,8 @@ let state = loadState();
 applyClassSettings();
 let selectedPaymentClass = "전체";
 let selectedPaymentFilter = "미납자";
+let selectedStudentList = "active";
+let selectedStudentSort = "oldest";
 let serverSaveTimer = null;
 let syncingFromServer = false;
 let currentStudentRoomStudentId = localStorage.getItem("orchardScienceClassroomStudentId") || "";
@@ -40,6 +42,8 @@ let currentStudentRoomId = "";
 let classroomMemberSelection = new Set();
 let classroomMemberAccess = {};
 let memberDialogStudents = [];
+let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let selectedScheduleDate = today();
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -63,6 +67,7 @@ function createInitialState() {
     classSettings: {},
     customClasses: [],
     classrooms: [],
+    scheduleEvents: [],
   };
 }
 
@@ -80,6 +85,7 @@ function normalizeState(saved) {
     classSettings: {},
     customClasses: [],
     classrooms: [],
+    scheduleEvents: [],
     ...saved,
   };
   next.customClasses = normalizeCustomClasses(next.customClasses);
@@ -90,12 +96,16 @@ function normalizeState(saved) {
       homework: "",
       homeworkStatus: "확인 전",
       classroomCode: "",
+      specialClassNames: [],
       subject: classInfo?.subject || "",
       book: classInfo?.defaultBook || "",
       ...student,
     };
     const subject = subjectAliases[normalized.subject] || normalized.subject || classInfo?.subject || "교과과학";
     normalized.subject = subjectChoices.includes(subject) ? subject : "교과과학";
+    normalized.specialClassNames = Array.isArray(normalized.specialClassNames)
+      ? [...new Set(normalized.specialClassNames.filter(Boolean))].filter((name) => name !== normalized.className)
+      : [];
     return normalized;
   });
   next.consulting = next.consulting || {};
@@ -125,6 +135,10 @@ function normalizeState(saved) {
     grade: record.grade || "초3",
     waitDate: record.waitDate || today(),
     className: record.className || classes[0].name,
+    baseYear: Number(record.baseYear || String(record.waitDate || today()).slice(0, 4) || new Date().getFullYear()),
+    baseGrade: record.baseGrade || record.grade || "초3",
+    autoAdvance: Boolean(record.autoAdvance),
+    nextYearClassName: record.nextYearClassName || "",
     noticeDate: record.noticeDate || "",
     memo: record.memo || "",
     status: record.status || "대기",
@@ -132,6 +146,10 @@ function normalizeState(saved) {
     createdAt: record.createdAt || Date.now(),
   }));
   next.classrooms = normalizeClassrooms(next.classrooms);
+  next.scheduleEvents = (next.scheduleEvents || []).map((event) => ({
+    id: event.id || crypto.randomUUID(), date: event.date || today(), type: event.type || "학원 행사",
+    title: event.title || "", memo: event.memo || "", createdAt: event.createdAt || Date.now(),
+  }));
   return next;
 }
 
@@ -154,6 +172,7 @@ function normalizeClassrooms(classrooms = []) {
         link: post.link || "",
         links: normalizeYoutubeLinks(post.links, post.link),
         openToAll: Boolean(post.openToAll),
+        lessonDate: normalizeDateValue(post.lessonDate) || "",
         createdAt: post.createdAt || Date.now(),
         updatedAt: post.updatedAt || post.createdAt || Date.now(),
       })),
@@ -199,7 +218,8 @@ function normalizeClassroomMemberAccess(room = {}, memberStudentIds = room.membe
   return memberStudentIds.reduce((result, studentId) => {
     const item = source[studentId] || {};
     const startDate = normalizeDateValue(typeof item === "string" ? item : item.startDate);
-    result[studentId] = { startDate };
+    const endDate = normalizeDateValue(typeof item === "string" ? "" : item.endDate);
+    result[studentId] = { startDate, endDate };
     return result;
   }, {});
 }
@@ -208,6 +228,7 @@ function mergeClassroomMemberAccess(existing = {}, incoming = {}, memberStudentI
   return memberStudentIds.reduce((result, studentId) => {
     result[studentId] = {
       startDate: normalizeDateValue(existing[studentId]?.startDate || incoming[studentId]?.startDate),
+      endDate: normalizeDateValue(existing[studentId]?.endDate || incoming[studentId]?.endDate),
     };
     return result;
   }, {});
@@ -215,6 +236,17 @@ function mergeClassroomMemberAccess(existing = {}, incoming = {}, memberStudentI
 
 function getClassroomMemberStartDate(room, studentId) {
   return normalizeDateValue(room?.memberAccess?.[studentId]?.startDate);
+}
+
+function getClassroomMemberEndDate(room, studentId) {
+  return normalizeDateValue(room?.memberAccess?.[studentId]?.endDate);
+}
+
+function canStudentAccessClassroom(room, studentId, date = today()) {
+  if (!room || !studentId || !isClassroomPublic(room) || !room.memberStudentIds.includes(studentId)) return false;
+  const startDate = getClassroomMemberStartDate(room, studentId);
+  const endDate = getClassroomMemberEndDate(room, studentId);
+  return (!startDate || date >= startDate) && (!endDate || date <= endDate);
 }
 
 function canStudentSeeClassroomPost(room, studentId, post) {
@@ -552,11 +584,45 @@ function classOptions(includeAll = false) {
   return options.concat(classes.map((item) => `<option value="${item.name}">${item.name}</option>`)).join("");
 }
 
+function isSpecialClassName(className) {
+  const classInfo = getClassInfo(className);
+  return classInfo?.type === "방학특강" || String(className || "").includes("특강") || String(className || "").includes("방학");
+}
+
+function regularClassOptions(includeEmpty = true) {
+  const options = includeEmpty ? ['<option value="">정규반 없음</option>'] : [];
+  return options.concat(classes.filter((item) => !isSpecialClassName(item.name)).map((item) => `<option value="${item.name}">${item.name}</option>`)).join("");
+}
+
+function getStudentClassNames(student) {
+  return [...new Set([student.className, ...(student.specialClassNames || [])].filter(Boolean))];
+}
+
+function studentBelongsToClass(student, className) {
+  return className === "전체" || getStudentClassNames(student).includes(className);
+}
+
+function formatStudentClasses(student) {
+  const regular = student.className && !isSpecialClassName(student.className) ? student.className : "정규반 없음";
+  const specials = [...new Set([...(student.specialClassNames || []), ...(isSpecialClassName(student.className) ? [student.className] : [])])];
+  return `<div class="class-stack"><strong>${regular}</strong>${specials.map((name) => `<span class="special-class-label">특강 · ${name}</span>`).join("")}</div>`;
+}
+
+function renderSpecialClassChecks(selected = []) {
+  const selectedSet = new Set(selected || []);
+  const specialClasses = classes.filter((item) => isSpecialClassName(item.name));
+  $("#specialClassChecks").innerHTML = specialClasses.length
+    ? specialClasses.map((item) => `<label><input type="checkbox" value="${item.name}" ${selectedSet.has(item.name) ? "checked" : ""} />${item.name}</label>`).join("")
+    : `<span class="muted-text">반관리에서 특강반을 만들면 여기에 표시됩니다.</span>`;
+}
+
 function classEditOptions() {
   return ['<option value="">+ 새 반 만들기</option>'].concat(classes.map((item) => `<option value="${item.name}">${item.name}</option>`)).join("");
 }
 
 function setup() {
+  if (setup.hasRun) return;
+  setup.hasRun = true;
   $("#todayLabel").textContent = new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
     month: "long",
@@ -568,14 +634,19 @@ function setup() {
   syncAttendanceWeekdayToDate();
   $("#paymentMonth").value = currentMonth();
   $("#consultingDate").value = today();
+  $("#consultingClass").innerHTML = classOptions(true);
+  $("#classroomPostLessonDateInput").value = today();
+  $("#scheduleDateInput").value = today();
   $("#leadDate").value = today();
   $("#waitDate").value = today();
   $("#classHomeworkDate").value = today();
   $("#classFilter").innerHTML = classOptions(true);
   $("#attendanceClass").innerHTML = classOptions();
   $("#homeworkClass").innerHTML = classOptions(true);
-  $("#classInput").innerHTML = classOptions();
+  $("#classInput").innerHTML = regularClassOptions();
   $("#waitClass").innerHTML = classOptions();
+  $("#waitNextClass").innerHTML = classOptions();
+  renderSpecialClassChecks();
   $("#classEditSelect").innerHTML = classEditOptions();
   $("#classSubjectInput").innerHTML = subjectChoices.map((subject) => `<option>${subject}</option>`).join("");
   fillClassEditForm();
@@ -605,6 +676,16 @@ function bindEvents() {
   $("#studentSearch").addEventListener("input", renderStudents);
   $("#classFilter").addEventListener("change", renderStudents);
   $("#statusFilter").addEventListener("change", renderStudents);
+  $("#waitAutoAdvance").addEventListener("change", syncWaitAutoAdvanceFields);
+  $("#waitGrade").addEventListener("change", suggestWaitNextClass);
+  $("#waitClass").addEventListener("change", suggestWaitNextClass);
+  $$('[data-student-list]').forEach((button) => {
+    button.addEventListener("click", () => selectStudentList(button.dataset.studentList));
+  });
+  $$('[data-student-sort]').forEach((button) => {
+    button.addEventListener("click", () => selectStudentSort(button.dataset.studentSort));
+  });
+  $("#finishSpecialClassBtn").addEventListener("click", finishSelectedSpecialClass);
   $("#attendanceDate").addEventListener("change", () => {
     syncAttendanceWeekdayToDate();
     renderAttendance();
@@ -633,6 +714,7 @@ function bindEvents() {
   $("#copyAiReportBtn").addEventListener("click", copyAiReport);
   $("#downloadAiReportBtn").addEventListener("click", downloadAiReport);
   $("#consultingStudent").addEventListener("change", renderConsulting);
+  $("#consultingClass").addEventListener("change", () => { renderConsultingStudentOptions(); renderConsulting(); });
   $("#addConsultingBtn").addEventListener("click", addConsultingRecord);
   $("#addLeadBtn").addEventListener("click", addNewConsultation);
   $("#saveWaitBtn").addEventListener("click", saveWaitlistFromForm);
@@ -651,6 +733,10 @@ function bindEvents() {
   $("#exportOnlineClassroomBtn").addEventListener("click", exportOnlineClassroom);
   $("#closeMemberDialogBtn").addEventListener("click", () => $("#memberDialog").close());
   $("#copyMemberCodesBtn").addEventListener("click", copyMemberDialogCodes);
+  $("#calendarPrevBtn").addEventListener("click", () => { calendarCursor.setMonth(calendarCursor.getMonth() - 1); renderScheduleCalendar(); });
+  $("#calendarNextBtn").addEventListener("click", () => { calendarCursor.setMonth(calendarCursor.getMonth() + 1); renderScheduleCalendar(); });
+  $("#calendarTodayBtn").addEventListener("click", () => { calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1); selectScheduleDate(today()); });
+  $("#addScheduleBtn").addEventListener("click", addScheduleEvent);
 
   $("#studentForm").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -675,6 +761,7 @@ function navigateToView(viewId) {
 function renderAll() {
   renderSchoolOptions();
   renderDashboard();
+  renderScheduleCalendar();
   renderClasses();
   renderStudents();
   renderAttendance();
@@ -717,10 +804,11 @@ function renderDashboard() {
   $("#totalStudents").textContent = state.students.length;
   $("#unpaidCount").textContent = unpaid;
 
-  $("#todayClasses").innerHTML = classes
-    .slice(0, 6)
+  const weekday = "일월화수목금토"[new Date().getDay()];
+  const todayClassItems = classes.filter((item) => getClassWeekdays(item).includes(weekday));
+  $("#todayClasses").innerHTML = todayClassItems.length ? todayClassItems
     .map((item) => {
-      const count = state.students.filter((student) => student.className === item.name).length;
+      const count = state.students.filter((student) => studentBelongsToClass(student, item.name)).length;
       return `
         <article class="class-card">
           <div>
@@ -731,7 +819,7 @@ function renderDashboard() {
         </article>
       `;
     })
-    .join("");
+    .join("") : `<div class="empty-state">오늘 예정된 정규 수업이 없습니다.</div>`;
 
   const recent = [...state.students].sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
   $("#recentStudents").innerHTML = recent.length
@@ -740,7 +828,7 @@ function renderDashboard() {
           (student) => `
             <tr>
               <td><button class="table-link-button" type="button" onclick="openStudentDialog('${student.id}')">${student.name}</button></td>
-              <td>${student.className}</td>
+              <td>${getStudentClassNames(student).join(", ") || "-"}</td>
               <td>${student.school || "-"} / ${student.grade || "-"}</td>
               <td><span class="badge">${student.status}</span></td>
             </tr>
@@ -748,6 +836,60 @@ function renderDashboard() {
         )
         .join("")
     : `<tr><td colspan="4">아직 등록된 학생이 없습니다.</td></tr>`;
+}
+
+function getClassWeekdays(item) {
+  return [...new Set(String(item?.time || "").match(/[월화수목금토일]/g) || [])];
+}
+
+function dateKey(date) {
+  const y = date.getFullYear(), m = String(date.getMonth() + 1).padStart(2, "0"), d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function renderScheduleCalendar() {
+  const year = calendarCursor.getFullYear(), month = calendarCursor.getMonth();
+  $("#calendarMonthLabel").textContent = `${year}년 ${month + 1}월`;
+  const first = new Date(year, month, 1), lastDate = new Date(year, month + 1, 0).getDate();
+  const cells = ["일", "월", "화", "수", "목", "금", "토"].map((day) => `<div class="calendar-weekday">${day}</div>`);
+  for (let i = 0; i < first.getDay(); i += 1) cells.push(`<div class="calendar-day outside"></div>`);
+  for (let day = 1; day <= lastDate; day += 1) {
+    const date = new Date(year, month, day), key = dateKey(date), weekday = "일월화수목금토"[date.getDay()];
+    const classItems = classes.filter((item) => getClassWeekdays(item).includes(weekday));
+    const events = state.scheduleEvents.filter((item) => item.date === key);
+    cells.push(`<button class="calendar-day ${key === today() ? "today" : ""} ${key === selectedScheduleDate ? "selected" : ""}" type="button" onclick="selectScheduleDate('${key}')"><span>${day}</span>${classItems.slice(0, 2).map((item) => `<small class="calendar-class">${item.name}</small>`).join("")}${events.slice(0, 2).map((item) => `<small class="calendar-event">${item.title}</small>`).join("")}${classItems.length + events.length > 4 ? `<small>+${classItems.length + events.length - 4}</small>` : ""}</button>`);
+  }
+  $("#academyCalendar").innerHTML = cells.join("");
+  renderScheduleAgenda();
+}
+
+function selectScheduleDate(value) {
+  selectedScheduleDate = value;
+  $("#scheduleDateInput").value = value;
+  const date = new Date(`${value}T00:00:00`);
+  calendarCursor = new Date(date.getFullYear(), date.getMonth(), 1);
+  renderScheduleCalendar();
+}
+
+function addScheduleEvent() {
+  const date = $("#scheduleDateInput").value, title = $("#scheduleTitleInput").value.trim();
+  if (!date || !title) return alert("일자와 일정명을 입력해주세요.");
+  state.scheduleEvents.push({ id: crypto.randomUUID(), date, type: $("#scheduleTypeInput").value, title, memo: $("#scheduleMemoInput").value.trim(), createdAt: Date.now() });
+  $("#scheduleTitleInput").value = ""; $("#scheduleMemoInput").value = ""; selectedScheduleDate = date;
+  saveState(); renderScheduleCalendar();
+}
+
+function deleteScheduleEvent(id) {
+  const event = state.scheduleEvents.find((item) => item.id === id);
+  if (!event || !confirm(`${event.title} 일정을 삭제할까요?`)) return;
+  state.scheduleEvents = state.scheduleEvents.filter((item) => item.id !== id); saveState(); renderScheduleCalendar();
+}
+
+function renderScheduleAgenda() {
+  const date = new Date(`${selectedScheduleDate}T00:00:00`), weekday = "일월화수목금토"[date.getDay()];
+  const classItems = classes.filter((item) => getClassWeekdays(item).includes(weekday));
+  const events = state.scheduleEvents.filter((item) => item.date === selectedScheduleDate);
+  $("#scheduleAgenda").innerHTML = `<h3>${selectedScheduleDate} 일정</h3>` + (classItems.map((item) => `<article><span class="badge">수업</span><strong>${item.name}</strong><small>${item.time}</small></article>`).join("") + events.map((item) => `<article><span class="badge orange">${item.type}</span><strong>${item.title}</strong><small>${item.memo || ""}</small><button class="mini-button danger" type="button" onclick="deleteScheduleEvent('${item.id}')">삭제</button></article>`).join("") || `<div class="empty-state">등록된 일정이 없습니다.</div>`);
 }
 
 function openDashboardStudents() {
@@ -870,9 +1012,17 @@ function deleteClassInfoFromForm() {
     alert("기본 반은 삭제할 수 없고, 새로 만든 반만 삭제할 수 있습니다.");
     return;
   }
-  const studentCount = state.students.filter((student) => student.className === className).length;
+  const studentCount = state.students.filter((student) => studentBelongsToClass(student, className)).length;
   if (studentCount > 0) {
     alert(`${className}에 학생 ${studentCount}명이 연결되어 있어 삭제할 수 없습니다. 학생의 수강반을 먼저 바꿔주세요.`);
+    return;
+  }
+  const waitlistCount = (state.waitlist || []).filter((record) => {
+    const projection = getWaitlistProjection(record);
+    return record.className === className || record.nextYearClassName === className || projection.className === className;
+  }).length;
+  if (waitlistCount > 0) {
+    alert(`${className}에 대기자 ${waitlistCount}명이 연결되어 있어 삭제할 수 없습니다. 대기자 명단에서 새 반으로 먼저 연결해주세요.`);
     return;
   }
   if (!confirm(`${className} 반을 삭제할까요?`)) return;
@@ -892,14 +1042,16 @@ function refreshClassControls() {
     homeworkClass: $("#homeworkClass")?.value,
     classInput: $("#classInput")?.value,
     waitClass: $("#waitClass")?.value,
+    waitNextClass: $("#waitNextClass")?.value,
     classEditSelect: $("#classEditSelect")?.value,
   };
 
   $("#classFilter").innerHTML = classOptions(true);
   $("#attendanceClass").innerHTML = classOptions();
   $("#homeworkClass").innerHTML = classOptions(true);
-  $("#classInput").innerHTML = classOptions();
+  $("#classInput").innerHTML = regularClassOptions();
   $("#waitClass").innerHTML = classOptions();
+  $("#waitNextClass").innerHTML = classOptions();
   $("#classEditSelect").innerHTML = classEditOptions();
 
   Object.entries(previous).forEach(([id, value]) => {
@@ -914,7 +1066,7 @@ function renderClassCards(type) {
   return classes
     .filter((item) => item.type === type)
     .map((item) => {
-      const count = state.students.filter((student) => student.className === item.name).length;
+      const count = state.students.filter((student) => studentBelongsToClass(student, item.name)).length;
       return `
         <article class="class-card">
           <div>
@@ -932,7 +1084,7 @@ function renderClassCards(type) {
 }
 
 function openClassStudentList(className) {
-  const students = sortStudentsByGradeName(state.students.filter((student) => student.className === className));
+  const students = sortStudentsByGradeName(state.students.filter((student) => studentBelongsToClass(student, className)));
   openMemberDialog(`${className} 학생 명단`, students);
 }
 
@@ -983,17 +1135,87 @@ function filteredStudents() {
   const status = $("#statusFilter").value;
 
   return state.students.filter((student) => {
-    const searchable = `${student.name} ${student.school} ${student.grade} ${student.className} ${student.book} ${student.homework}`.toLowerCase();
+    const searchable = `${student.name} ${student.school} ${student.grade} ${getStudentClassNames(student).join(" ")} ${student.book} ${student.homework}`.toLowerCase();
     const matchesKeyword = !keyword || searchable.includes(keyword);
-    const matchesClass = className === "전체" || student.className === className;
-    const matchesStatus = status === "전체" || student.status === status;
-    return matchesKeyword && matchesClass && matchesStatus;
+    const matchesClass = studentBelongsToClass(student, className);
+    const matchesList = selectedStudentList === "retired"
+      ? student.status === "퇴원"
+      : selectedStudentList === "paused"
+        ? student.status === "휴원"
+        : !["퇴원", "휴원"].includes(student.status);
+    const matchesStatus = selectedStudentList !== "active" || status === "전체" || student.status === status;
+    return matchesKeyword && matchesClass && matchesStatus && matchesList;
   });
+}
+
+function selectStudentList(list) {
+  selectedStudentList = ["active", "paused", "retired"].includes(list) ? list : "active";
+  $$('[data-student-list]').forEach((button) => button.classList.toggle("active", button.dataset.studentList === selectedStudentList));
+  $("#statusFilter").disabled = selectedStudentList !== "active";
+  if (selectedStudentList !== "active") $("#statusFilter").value = "전체";
+  renderStudents();
+}
+
+function selectStudentSort(sort) {
+  selectedStudentSort = sort === "newest" ? "newest" : "oldest";
+  $$('[data-student-sort]').forEach((button) => button.classList.toggle("active", button.dataset.studentSort === selectedStudentSort));
+  renderStudents();
+}
+
+function sortStudentsByRegistration(students) {
+  return [...students].sort((a, b) => {
+    const aCreated = Number(a.createdAt || 0);
+    const bCreated = Number(b.createdAt || 0);
+    const dateDiff = selectedStudentSort === "newest" ? bCreated - aCreated : aCreated - bCreated;
+    if (dateDiff) return dateDiff;
+    return String(a.name || "").localeCompare(String(b.name || ""), "ko", { numeric: true });
+  });
+}
+
+function syncFinishSpecialClassButton() {
+  const className = $("#classFilter").value;
+  const classInfo = getClassInfo(className);
+  const isSpecial = className !== "전체" && (classInfo?.type === "방학특강" || className.includes("특강") || className.includes("방학"));
+  const button = $("#finishSpecialClassBtn");
+  button.hidden = selectedStudentList !== "active" || !isSpecial;
+  if (isSpecial) button.textContent = `${className} 특강 종료 처리`;
+}
+
+function finishSelectedSpecialClass() {
+  const className = $("#classFilter").value;
+  const targets = filteredStudents().filter((student) => student.status !== "퇴원");
+  if (!targets.length) {
+    alert("퇴원 처리할 학생이 없습니다.");
+    return;
+  }
+  const keepActiveCount = targets.filter((student) => getStudentClassNames(student).some((name) => name !== className)).length;
+  const retireCount = targets.length - keepActiveCount;
+  if (!confirm(`${className} 특강 종료를 처리할까요?\n\n· 정규반이나 다른 반이 있는 학생 ${keepActiveCount}명: 이 특강만 제거\n· 이 특강만 듣는 학생 ${retireCount}명: 퇴원생 명단으로 이동\n\n과거 출석·납부·상담 기록은 삭제되지 않습니다.`)) return;
+  const targetIds = new Set(targets.map((student) => student.id));
+  state.students = state.students.map((student) => {
+    if (!targetIds.has(student.id)) return student;
+    const nextRegularClass = student.className === className ? "" : student.className;
+    const nextSpecialClasses = (student.specialClassNames || []).filter((name) => name !== className);
+    const hasOtherClass = [nextRegularClass, ...nextSpecialClasses].some(Boolean);
+    return {
+      ...student,
+      className: nextRegularClass,
+      specialClassNames: nextSpecialClasses,
+      status: hasOtherClass ? student.status : "퇴원",
+      retiredAt: hasOtherClass ? student.retiredAt : Date.now(),
+      retiredReason: hasOtherClass ? student.retiredReason : `${className} 특강 종료`,
+    };
+  });
+  saveState();
+  renderAll();
+  alert(`특강 종료 처리가 끝났습니다.\n정규반 유지 ${keepActiveCount}명 · 퇴원생 이동 ${retireCount}명`);
 }
 
 function renderStudents() {
   ensureStudentClassroomCodes();
-  const students = filteredStudents();
+  const students = sortStudentsByRegistration(filteredStudents());
+  $("#studentListTitle").textContent = selectedStudentList === "retired" ? "퇴원생 목록" : selectedStudentList === "paused" ? "휴원생 목록" : "재원생 목록";
+  syncFinishSpecialClassButton();
   $("#studentCountLabel").textContent = `${students.length}명`;
   $("#studentTable").innerHTML = students.length
     ? students
@@ -1003,15 +1225,18 @@ function renderStudents() {
             <tr>
               <td><strong>${student.name}</strong><br><span class="badge">${student.status}</span></td>
               <td>${student.school || "-"}<br>${student.grade || "-"}</td>
-              <td>${student.className}<br><span class="muted-text">${classInfo?.frequency || "-"}</span></td>
+              <td>${formatStudentClasses(student)}<span class="muted-text">${classInfo?.frequency || "-"}</span></td>
               <td>학생 ${student.studentPhone || "-"}<br>학부모 ${student.parentPhone || "-"}</td>
               <td><button class="code-copy-button" type="button" onclick="copyClassroomCode('${student.id}')">${student.classroomCode || "-"}</button></td>
               <td>${student.book || "-"}<br><span class="muted-text">숙제: ${getHomeworkText(student) || "없음"} / ${student.homeworkStatus || "확인 전"}</span></td>
               <td>
                 <div class="row-actions">
-                  <button class="mini-button" type="button" onclick="openStudentDialog('${student.id}')">수정</button>
-                  <button class="mini-button" type="button" onclick="quickConsult('${student.id}')">상담</button>
-                  <button class="mini-button danger" type="button" onclick="deleteStudent('${student.id}')">삭제</button>
+                  ${selectedStudentList === "retired" || selectedStudentList === "paused"
+                    ? `<button class="mini-button restore" type="button" onclick="restoreStudent('${student.id}')">재원생으로 복구</button>
+                       ${selectedStudentList === "retired" ? `<button class="mini-button danger" type="button" onclick="permanentlyDeleteStudent('${student.id}')">영구 삭제</button>` : ""}`
+                    : `<button class="mini-button" type="button" onclick="openStudentDialog('${student.id}')">수정</button>
+                       <button class="mini-button" type="button" onclick="quickConsult('${student.id}')">상담</button>
+                       <button class="mini-button warning" type="button" onclick="retireStudent('${student.id}')">퇴원 처리</button>`}
                 </div>
               </td>
             </tr>
@@ -1037,7 +1262,7 @@ function renderAttendance() {
   const className = $("#attendanceClass").value;
   const date = $("#attendanceDate").value;
   const weekday = getSelectedAttendanceWeekday();
-  const students = state.students.filter((student) => student.className === className);
+  const students = state.students.filter((student) => studentBelongsToClass(student, className));
   const classInfo = getClassInfo(className);
   const session = getAttendanceSession(className, date, weekday);
   const anchor = getAttendanceCycleAnchor(className, weekday);
@@ -1052,7 +1277,7 @@ function renderAttendance() {
 
 function renderAttendanceRow(student, date) {
   const record = getAttendanceRecord(student.id, date);
-  const session = record.session || getAttendanceSession(student.className, date);
+  const session = record.session || getAttendanceSession($("#attendanceClass").value, date);
   const showMakeup = record.status === "결석" || record.makeupDate;
   return `
     <article class="manage-row">
@@ -1099,7 +1324,7 @@ function getAttendanceSession(className, date, weekday = getSelectedAttendanceWe
   if (saved) return Number(saved);
   const anchor = getAttendanceCycleAnchor(className, weekday);
   if (anchor) return getCycleSessionFromAnchor(anchor, date);
-  const classStudentIds = new Set(state.students.filter((student) => student.className === className).map((student) => student.id));
+  const classStudentIds = new Set(state.students.filter((student) => studentBelongsToClass(student, className)).map((student) => student.id));
   const dates = Object.keys(state.attendance || {}).filter((savedDate) => {
     if (savedDate === date) return true;
     return Object.keys(state.attendance[savedDate] || {}).some((studentId) => classStudentIds.has(studentId));
@@ -1120,7 +1345,7 @@ function saveAttendanceSession() {
   state.attendanceSessions[date][className] = session;
   saveAttendanceCycleAnchor(className, weekday, date, session, true);
 
-  const students = state.students.filter((student) => student.className === className);
+  const students = state.students.filter((student) => studentBelongsToClass(student, className));
   students.forEach((student) => {
     const record = getAttendanceRecord(student.id, date);
     if (state.attendance[date]?.[student.id]) {
@@ -1168,7 +1393,7 @@ function setAttendanceMakeupDate(studentId, date, makeupDate) {
 
 function renderPayments() {
   const className = selectedPaymentClass;
-  const students = sortStudentsByClassGradeName(state.students.filter((student) => className === "전체" || student.className === className));
+  const students = sortStudentsByClassGradeName(state.students.filter((student) => studentBelongsToClass(student, className)));
   const filtered = filterPaymentStudents(students);
   const paidTotal = students.reduce((sum, student) => {
     const payment = getPayment(student.id);
@@ -1230,7 +1455,7 @@ function renderPaymentClassButtons() {
   if (!select) return;
   const options = [{ name: "전체", label: `전체 반 (${state.students.length}명)` }].concat(
     classes.map((classInfo) => {
-      const count = state.students.filter((student) => student.className === classInfo.name).length;
+      const count = state.students.filter((student) => studentBelongsToClass(student, classInfo.name)).length;
       return { name: classInfo.name, label: `${classInfo.name} (${count}명)` };
     }),
   );
@@ -1308,7 +1533,7 @@ function setPaymentDate(studentId, paidAt) {
 function renderBooks() {
   $("#bookGrid").innerHTML = classes
     .map((classInfo) => {
-      const students = state.students.filter((student) => student.className === classInfo.name);
+      const students = state.students.filter((student) => studentBelongsToClass(student, classInfo.name));
       return `
         <article class="book-card">
           <div class="book-card-head">
@@ -1331,7 +1556,7 @@ function renderBooks() {
 
 function renderHomework() {
   const className = $("#homeworkClass").value;
-  const students = state.students.filter((student) => className === "전체" || student.className === className);
+  const students = state.students.filter((student) => studentBelongsToClass(student, className));
   renderClassHomeworkEditor();
   $("#homeworkList").innerHTML = students.length
     ? students
@@ -1340,7 +1565,7 @@ function renderHomework() {
             <article class="manage-row">
               <div>
                 <strong>${student.name}</strong>
-                <div class="meta">${student.className} · ${getHomeworkText(student) || "숙제 입력 없음"}</div>
+                <div class="meta">${getStudentClassNames(student).join(", ") || "-"} · ${getHomeworkText(student) || "숙제 입력 없음"}</div>
               </div>
               <button class="mini-button" type="button" onclick="copyHomeworkMessage('${student.id}')">숙제 안내 복사</button>
               <div class="segmented">
@@ -1361,11 +1586,15 @@ function renderHomework() {
 }
 
 function getHomeworkText(student) {
-  return student.homework || state.classHomework[student.className]?.text || "";
+  const selectedClass = $("#homeworkClass")?.value;
+  const className = selectedClass && selectedClass !== "전체" && studentBelongsToClass(student, selectedClass) ? selectedClass : student.className;
+  return student.homework || state.classHomework[className]?.text || "";
 }
 
 function getHomeworkDate(student) {
-  return state.classHomework[student.className]?.date || "";
+  const selectedClass = $("#homeworkClass")?.value;
+  const className = selectedClass && selectedClass !== "전체" && studentBelongsToClass(student, selectedClass) ? selectedClass : student.className;
+  return state.classHomework[className]?.date || "";
 }
 
 function renderClassHomeworkEditor() {
@@ -1413,7 +1642,7 @@ async function copyHomeworkMessage(studentId) {
   const homeworkDate = getHomeworkDate(student);
   const message = [
     `[과수원과학 숙제 안내]`,
-    `${student.name} 학생 / ${student.className}`,
+    `${student.name} 학생 / ${getStudentClassNames(student).join(", ") || "반 미지정"}`,
     homeworkDate ? `숙제일자: ${homeworkDate}` : "",
     `숙제: ${homeworkText || "아직 입력된 숙제가 없습니다."}`,
     `상태: ${student.homeworkStatus || "확인 전"}`,
@@ -1598,7 +1827,11 @@ function downloadAiReport() {
 }
 
 function renderConsultingStudentOptions() {
-  $("#consultingStudent").innerHTML = state.students.map((student) => `<option value="${student.id}">${student.name} · ${student.className}</option>`).join("");
+  const previous = $("#consultingStudent").value;
+  const className = $("#consultingClass").value;
+  const students = state.students.filter((student) => student.status !== "퇴원" && (!className || studentBelongsToClass(student, className)));
+  $("#consultingStudent").innerHTML = students.length ? students.map((student) => `<option value="${student.id}">${student.name} · ${getStudentClassNames(student).join(", ") || "반 미지정"}</option>`).join("") : `<option value="">해당 반 학생 없음</option>`;
+  if (students.some((student) => student.id === previous)) $("#consultingStudent").value = previous;
 }
 
 function renderConsulting() {
@@ -1645,6 +1878,9 @@ function deleteConsultingRecord(studentId, index) {
 
 function quickConsult(studentId) {
   switchView("consulting", "상담기록");
+  const student = state.students.find((item) => item.id === studentId);
+  $("#consultingClass").value = getStudentClassNames(student)[0] || "";
+  renderConsultingStudentOptions();
   $("#consultingStudent").value = studentId;
   renderConsulting();
 }
@@ -1707,6 +1943,56 @@ function deleteNewConsultation(recordId) {
   renderNewConsultations();
 }
 
+const gradeProgression = ["초3", "초4", "초5", "초6", "중1", "중2", "중3", "고1", "고2", "고3"];
+
+function advanceGrade(grade, years = 1) {
+  const index = gradeProgression.indexOf(grade);
+  if (index < 0) return grade;
+  return gradeProgression[Math.min(index + Math.max(0, years), gradeProgression.length - 1)];
+}
+
+function suggestClassForGrade(grade, previousClassName = "") {
+  const candidates = classes.filter((item) => !isSpecialClassName(item.name) && item.name.includes(grade));
+  if (!candidates.length) return "";
+  if (String(previousClassName).includes("과학독해")) {
+    const reading = candidates.find((item) => item.name.includes("과학독해"));
+    if (reading) return reading.name;
+  }
+  return candidates[0].name;
+}
+
+function suggestWaitNextClass() {
+  if (!$("#waitAutoAdvance").checked) return;
+  const nextGrade = advanceGrade($("#waitGrade").value, 1);
+  const suggested = suggestClassForGrade(nextGrade, $("#waitClass").value);
+  if (suggested) $("#waitNextClass").value = suggested;
+}
+
+function syncWaitAutoAdvanceFields() {
+  const enabled = $("#waitAutoAdvance").checked;
+  $("#waitNextClassWrap").hidden = !enabled;
+  if (enabled) suggestWaitNextClass();
+}
+
+function getWaitlistProjection(record, year = new Date().getFullYear()) {
+  const baseYear = Number(record.baseYear || String(record.waitDate || today()).slice(0, 4) || year);
+  const yearsPassed = Math.max(0, year - baseYear);
+  const baseGrade = record.baseGrade || record.grade;
+  if (!record.autoAdvance || yearsPassed === 0) {
+    return { grade: record.grade, className: record.className, advanced: false, needsRelink: !getClassInfo(record.className) };
+  }
+  let projectedClass = record.nextYearClassName || suggestClassForGrade(advanceGrade(baseGrade, 1), record.className);
+  for (let step = 2; step <= yearsPassed; step += 1) {
+    projectedClass = suggestClassForGrade(advanceGrade(baseGrade, step), projectedClass) || projectedClass;
+  }
+  return {
+    grade: advanceGrade(baseGrade, yearsPassed),
+    className: projectedClass || record.className,
+    advanced: true,
+    needsRelink: !projectedClass || !getClassInfo(projectedClass),
+  };
+}
+
 function saveWaitlistFromForm() {
   const id = $("#waitId").value || crypto.randomUUID();
   const name = $("#waitName").value.trim();
@@ -1716,13 +2002,18 @@ function saveWaitlistFromForm() {
   }
 
   const existing = state.waitlist.find((record) => record.id === id);
+  const waitDate = $("#waitDate").value || today();
   const record = {
     id,
     name,
     school: $("#waitSchool").value.trim(),
     grade: $("#waitGrade").value,
-    waitDate: $("#waitDate").value || today(),
+    waitDate,
     className: $("#waitClass").value,
+    baseYear: existing?.baseYear || Number(waitDate.slice(0, 4)),
+    baseGrade: existing?.baseGrade || $("#waitGrade").value,
+    autoAdvance: $("#waitAutoAdvance").checked,
+    nextYearClassName: $("#waitAutoAdvance").checked ? $("#waitNextClass").value : "",
     noticeDate: $("#waitNoticeDate").value,
     memo: $("#waitMemo").value.trim(),
     status: existing?.status || "대기",
@@ -1744,6 +2035,9 @@ function clearWaitlistForm() {
   $("#waitGrade").value = "초3";
   $("#waitDate").value = today();
   $("#waitClass").value = classes[0].name;
+  $("#waitAutoAdvance").checked = false;
+  $("#waitNextClass").value = classes[0].name;
+  syncWaitAutoAdvanceFields();
   $("#waitNoticeDate").value = "";
   $("#waitMemo").value = "";
   $("#saveWaitBtn").textContent = "대기자 저장";
@@ -1759,6 +2053,9 @@ function editWaitlist(recordId) {
   $("#waitGrade").value = record.grade;
   $("#waitDate").value = record.waitDate;
   $("#waitClass").value = record.className;
+  $("#waitAutoAdvance").checked = Boolean(record.autoAdvance);
+  $("#waitNextClass").value = record.nextYearClassName || suggestClassForGrade(advanceGrade(record.baseGrade || record.grade, 1), record.className) || classes[0].name;
+  syncWaitAutoAdvanceFields();
   $("#waitNoticeDate").value = record.noticeDate;
   $("#waitMemo").value = record.memo;
   $("#saveWaitBtn").textContent = "수정 저장";
@@ -1806,11 +2103,18 @@ function renderWaitlist() {
 }
 
 function renderWaitlistCard(record, isDone = false) {
+  const projection = getWaitlistProjection(record);
+  const projectionText = projection.advanced
+    ? `<p class="${projection.needsRelink ? "wait-relink" : "wait-projection"}">${new Date().getFullYear()}년 자동 반영: ${projection.grade} · ${projection.needsRelink ? "반 다시 연결 필요" : `대기반 ${projection.className}`}</p>`
+    : record.autoAdvance
+      ? `<p class="wait-projection">다음 해 예정: ${advanceGrade(record.baseGrade || record.grade, 1)} · ${record.nextYearClassName || "반 다시 연결 필요"}</p>`
+      : "";
   return `
     <article class="wait-card ${isDone ? "done" : ""}">
       <div>
         <strong>${record.name}</strong>
         <p>${record.school || "-"} · ${record.grade} · 대기반 ${record.className}</p>
+        ${projectionText}
         <p>대기일 ${record.waitDate || "-"} · 자리 안내일 ${record.noticeDate || "미정"}</p>
         <p>${record.memo || "메모 없음"}</p>
       </div>
@@ -1828,7 +2132,7 @@ function renderWaitlistCard(record, isDone = false) {
 }
 
 function renderClassroomStudentOptions() {
-  const options = sortStudentsByGradeName(state.students).map((student) => `<option value="${student.id}">${student.grade} · ${student.name} · ${student.className}</option>`).join("");
+  const options = sortStudentsByGradeName(state.students).map((student) => `<option value="${student.id}">${student.grade} · ${student.name} · ${getStudentClassNames(student).join(", ") || "반 미지정"}</option>`).join("");
   if ($("#studentRoomLoginSelect")) $("#studentRoomLoginSelect").innerHTML = options;
   renderClassroomGradeOptions();
   renderClassroomMemberChecks();
@@ -1910,16 +2214,17 @@ function renderClassroomMemberChecks(selectedIds, selectedAccess = classroomMemb
           (student) => {
             const checked = classroomMemberSelection.has(student.id);
             const startDate = classroomMemberAccess[student.id]?.startDate || "";
+            const endDate = classroomMemberAccess[student.id]?.endDate || "";
             return `
             <div class="member-check">
               <div class="member-main">
                 <input type="checkbox" value="${student.id}" data-grade="${student.grade || ""}" ${checked ? "checked" : ""} onchange="setClassroomMemberChecked('${student.id}', this.checked)" />
                 <span>${student.name}</span>
-                <small>${student.school || "-"} · ${student.grade || "-"} · ${student.className}</small>
+                <small>${student.school || "-"} · ${student.grade || "-"} · ${getStudentClassNames(student).join(", ") || "반 미지정"}${student.status === "퇴원" ? " · 퇴원생" : ""}</small>
               </div>
-              <div class="member-start">
-                <small>입장일</small>
-                <input type="date" value="${startDate}" ${checked ? "" : "disabled"} onchange="setClassroomMemberStartDate('${student.id}', this.value)" />
+              <div class="member-access-dates">
+                <label><small>입장일</small><input type="date" value="${startDate}" ${checked ? "" : "disabled"} onchange="setClassroomMemberStartDate('${student.id}', this.value)" /></label>
+                <label><small>종료일</small><input type="date" value="${endDate}" ${checked ? "" : "disabled"} onchange="setClassroomMemberEndDate('${student.id}', this.value)" /></label>
               </div>
             </div>
           `;
@@ -1939,7 +2244,7 @@ function getVisibleClassroomStudents() {
 function setClassroomMemberChecked(studentId, checked) {
   if (checked) {
     classroomMemberSelection.add(studentId);
-    if (!classroomMemberAccess[studentId]) classroomMemberAccess[studentId] = { startDate: today() };
+    if (!classroomMemberAccess[studentId]) classroomMemberAccess[studentId] = { startDate: today(), endDate: "" };
   } else {
     classroomMemberSelection.delete(studentId);
     delete classroomMemberAccess[studentId];
@@ -1953,7 +2258,7 @@ function setVisibleClassroomMembers(checked) {
   getVisibleClassroomStudents().forEach((student) => {
     if (checked) {
       classroomMemberSelection.add(student.id);
-      if (!classroomMemberAccess[student.id]) classroomMemberAccess[student.id] = { startDate: today() };
+      if (!classroomMemberAccess[student.id]) classroomMemberAccess[student.id] = { startDate: today(), endDate: "" };
     } else {
       classroomMemberSelection.delete(student.id);
       delete classroomMemberAccess[student.id];
@@ -1964,7 +2269,22 @@ function setVisibleClassroomMembers(checked) {
 
 function setClassroomMemberStartDate(studentId, value) {
   if (!classroomMemberSelection.has(studentId)) return;
-  classroomMemberAccess[studentId] = { startDate: normalizeDateValue(value) };
+  classroomMemberAccess[studentId] = {
+    ...classroomMemberAccess[studentId],
+    startDate: normalizeDateValue(value),
+  };
+}
+
+function setClassroomMemberEndDate(studentId, value) {
+  if (!classroomMemberSelection.has(studentId)) return;
+  const endDate = normalizeDateValue(value);
+  const startDate = normalizeDateValue(classroomMemberAccess[studentId]?.startDate);
+  if (endDate && startDate && endDate < startDate) {
+    alert("종료일은 입장일보다 빠를 수 없습니다.");
+    renderClassroomMemberChecks();
+    return;
+  }
+  classroomMemberAccess[studentId] = { ...classroomMemberAccess[studentId], endDate };
 }
 
 function updateVisibleGradeAllCheck() {
@@ -1990,7 +2310,10 @@ function getSelectedClassroomMemberIds() {
 
 function getSelectedClassroomMemberAccess() {
   return getSelectedClassroomMemberIds().reduce((result, studentId) => {
-    result[studentId] = { startDate: normalizeDateValue(classroomMemberAccess[studentId]?.startDate) };
+    result[studentId] = {
+      startDate: normalizeDateValue(classroomMemberAccess[studentId]?.startDate),
+      endDate: normalizeDateValue(classroomMemberAccess[studentId]?.endDate),
+    };
     return result;
   }, {});
 }
@@ -2115,6 +2438,7 @@ function clearClassroomPostForm() {
   $("#postOpenToAllInput").checked = false;
   $("#postTitleInput").value = "";
   $("#postContentInput").value = "";
+  $("#classroomPostLessonDateInput").value = today();
   renderYoutubeLinkRows([]);
 }
 
@@ -2177,6 +2501,7 @@ function saveClassroomPostFromForm() {
     link: youtubeLinks[0]?.url || "",
     content: $("#postContentInput").value.trim(),
     openToAll: $("#postOpenToAllInput").checked,
+    lessonDate: $("#classroomPostLessonDateInput").value || today(),
     createdAt: existing?.createdAt || Date.now(),
     updatedAt: Date.now(),
   };
@@ -2203,6 +2528,7 @@ function editClassroomPost(roomId, postId) {
   $("#postOpenToAllInput").checked = Boolean(post.openToAll);
   $("#postTitleInput").value = post.title;
   $("#postContentInput").value = post.content || "";
+  $("#classroomPostLessonDateInput").value = post.lessonDate || today();
   renderYoutubeLinkRows(normalizeYoutubeLinks(post.links, post.link));
 }
 
@@ -2246,7 +2572,7 @@ function renderClassroomPostCard(roomId, post, editable = false) {
     <article class="classroom-post-card">
       <div class="post-head">
         <span class="badge ${post.type === "숙제" ? "orange" : ""}">${post.type}</span>
-        <small>${post.openToAll ? "전체 공개 · " : ""}${formatDateTime(post.createdAt)}</small>
+        <small>${post.openToAll ? "전체 공개 · " : ""}${post.lessonDate ? `수업일 ${formatLessonDate(post.lessonDate)} · ` : ""}${formatDateTime(post.createdAt)}</small>
       </div>
       <strong>${post.title}</strong>
       <p>${post.content || "내용 없음"}</p>
@@ -2267,6 +2593,10 @@ function formatDateTime(value) {
   return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
+function formatLessonDate(value) {
+  return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" }).format(new Date(`${value}T00:00:00`));
+}
+
 function getStudentRoomCode(student) {
   if (student.classroomCode) return String(student.classroomCode).trim().toUpperCase();
   const digits = `${student.parentPhone || student.studentPhone || ""}`.replace(/\D/g, "");
@@ -2276,12 +2606,6 @@ function getStudentRoomCode(student) {
 function loginStudentRoom() {
   const student = state.students.find((item) => item.id === $("#studentRoomLoginSelect").value);
   if (!student) return;
-  const requiredCode = getStudentRoomCode(student);
-  const enteredCode = $("#studentRoomCodeInput").value.trim().toUpperCase();
-  if (requiredCode && enteredCode !== requiredCode) {
-    alert("수업방 개인코드가 맞지 않습니다.");
-    return;
-  }
   currentStudentRoomStudentId = student.id;
   currentStudentRoomId = "";
   localStorage.setItem("orchardScienceClassroomStudentId", student.id);
@@ -2306,7 +2630,7 @@ function renderStudentClassroomView() {
   $("#studentRoomLogin").hidden = true;
   $("#studentRoomArea").hidden = false;
   $("#studentRoomNameLabel").textContent = `${student.name} 학생`;
-  const rooms = getAllowedClassrooms(student.id);
+  const rooms = getAdminPreviewClassrooms(student.id);
   $("#studentRoomCountLabel").textContent = `${rooms.length}개`;
   if (!currentStudentRoomId || !rooms.some((room) => room.id === currentStudentRoomId)) currentStudentRoomId = rooms[0]?.id || "";
   $("#studentClassroomList").innerHTML = rooms.length
@@ -2315,22 +2639,35 @@ function renderStudentClassroomView() {
           (room) => `
             <button class="${room.id === currentStudentRoomId ? "active" : ""}" type="button" onclick="openStudentClassroom('${room.id}')">
               <strong>${room.name}</strong>
-              <span>${getVisibleClassroomPosts(room, student.id).length}개 게시글</span>
+              <span>${getClassroomPreviewStatus(room, student.id)} · ${(room.posts || []).length}개 게시글</span>
             </button>
           `,
         )
         .join("")
-    : `<div class="empty-state">아직 입장 가능한 수업방이 없습니다.</div>`;
+    : `<div class="empty-state">이 학생에게 연결된 수업방이 없습니다. 수업방 관리에서 학생을 연결해주세요.</div>`;
   renderStudentClassroomPosts();
 }
 
+function getAdminPreviewClassrooms(studentId) {
+  return sortClassroomsByName(state.classrooms.filter((room) => room.memberStudentIds.includes(studentId)));
+}
+
+function getClassroomPreviewStatus(room, studentId) {
+  if (!isClassroomPublic(room)) return "비공개";
+  const startDate = getClassroomMemberStartDate(room, studentId);
+  const endDate = getClassroomMemberEndDate(room, studentId);
+  if (startDate && today() < startDate) return `이용 전 (${startDate}부터)`;
+  if (endDate && today() > endDate) return `기간 종료 (${endDate})`;
+  return "학생에게 공개 중";
+}
+
 function getAllowedClassrooms(studentId) {
-  return sortClassroomsByName(state.classrooms.filter((room) => isClassroomPublic(room) && room.memberStudentIds.includes(studentId)));
+  return sortClassroomsByName(state.classrooms.filter((room) => canStudentAccessClassroom(room, studentId)));
 }
 
 function openStudentClassroom(roomId) {
-  if (!currentStudentRoomStudentId || !getAllowedClassrooms(currentStudentRoomStudentId).some((room) => room.id === roomId)) {
-    alert("이 수업방에 접근할 수 없습니다.");
+  if (!currentStudentRoomStudentId || !getAdminPreviewClassrooms(currentStudentRoomStudentId).some((room) => room.id === roomId)) {
+    alert("이 학생에게 연결되지 않은 수업방입니다.");
     return;
   }
   currentStudentRoomId = roomId;
@@ -2338,8 +2675,8 @@ function openStudentClassroom(roomId) {
 }
 
 function renderStudentClassroomPosts() {
-  const room = getAllowedClassrooms(currentStudentRoomStudentId).find((item) => item.id === currentStudentRoomId);
-  const posts = getVisibleClassroomPosts(room, currentStudentRoomStudentId);
+  const room = getAdminPreviewClassrooms(currentStudentRoomStudentId).find((item) => item.id === currentStudentRoomId);
+  const posts = [...(room?.posts || [])];
   $("#studentClassroomTitle").textContent = room ? room.name : "게시글";
   $("#studentPostList").innerHTML = posts.length
     ? posts.sort((a, b) => b.createdAt - a.createdAt).map((post) => renderClassroomPostCard(room.id, post, false)).join("")
@@ -2367,7 +2704,7 @@ function buildOnlineStudentFiles(sourceState = state) {
         grade: student.grade,
         className: student.className,
       },
-      classrooms: sortClassroomsByName(classrooms.filter((room) => (room.memberStudentIds || []).includes(student.id))).map((room) => ({
+      classrooms: sortClassroomsByName(classrooms.filter((room) => canStudentAccessClassroom(room, student.id))).map((room) => ({
         id: room.id,
         name: room.name,
         teacher: room.teacher || "",
@@ -2382,6 +2719,7 @@ function buildOnlineStudentFiles(sourceState = state) {
             content: post.content || "",
             links: normalizeYoutubeLinks(post.links, post.link),
             openToAll: Boolean(post.openToAll),
+            lessonDate: post.lessonDate || "",
             createdAt: post.createdAt,
             updatedAt: post.updatedAt || post.createdAt,
           })),
@@ -2448,12 +2786,15 @@ function openStudentDialog(studentId = "") {
   renderSchoolOptions();
   const student = state.students.find((item) => item.id === studentId);
   const classInfo = getClassInfo(student?.className || classes[0].name);
+  $("#classInput").innerHTML = regularClassOptions();
+  const inheritedSpecials = [...new Set([...(student?.specialClassNames || []), ...(student?.className && isSpecialClassName(student.className) ? [student.className] : [])])];
+  renderSpecialClassChecks(inheritedSpecials);
   $("#dialogTitle").textContent = student ? "학생 정보 수정" : "학생 추가";
   $("#studentId").value = student?.id || "";
   $("#nameInput").value = student?.name || "";
   $("#schoolInput").value = student?.school || "";
   $("#gradeInput").value = student?.grade || "초3";
-  $("#classInput").value = student?.className || classes[0].name;
+  $("#classInput").value = student?.className && !isSpecialClassName(student.className) ? student.className : "";
   $("#studentPhoneInput").value = student?.studentPhone || "";
   $("#parentPhoneInput").value = student?.parentPhone || "";
   $("#classroomCodeInput").value = student?.classroomCode || "";
@@ -2474,12 +2815,14 @@ function saveStudentFromForm() {
   const existingCodes = getClassroomCodeSet(id);
   const enteredClassroomCode = $("#classroomCodeInput").value.trim().toUpperCase();
   const classroomCode = enteredClassroomCode || existing?.classroomCode || generateClassroomCode(existingCodes);
+  const specialClassNames = $$("#specialClassChecks input:checked").map((input) => input.value);
   const student = {
     id,
     name: $("#nameInput").value.trim(),
     school: $("#schoolInput").value.trim(),
     grade: $("#gradeInput").value,
     className: $("#classInput").value,
+    specialClassNames,
     studentPhone: $("#studentPhoneInput").value.trim(),
     parentPhone: $("#parentPhoneInput").value.trim(),
     classroomCode,
@@ -2505,13 +2848,43 @@ function saveStudentFromForm() {
   renderAll();
 }
 
-function deleteStudent(studentId) {
+function retireStudent(studentId) {
   const student = state.students.find((item) => item.id === studentId);
-  if (!student || !confirm(`${student.name} 학생을 삭제할까요?`)) return;
-  state.students = state.students.filter((item) => item.id !== studentId);
-  delete state.consulting[studentId];
+  if (!student || !confirm(`${student.name} 학생을 퇴원생 명단으로 옮길까요?\n\n출석·납부·상담 기록은 그대로 유지됩니다.`)) return;
+  state.students = state.students.map((item) => item.id === studentId ? { ...item, status: "퇴원", retiredAt: Date.now(), retiredReason: "개별 퇴원 처리" } : item);
   saveState();
   renderAll();
+}
+
+function restoreStudent(studentId) {
+  const student = state.students.find((item) => item.id === studentId);
+  if (!student || !confirm(`${student.name} 학생을 재원생 명단으로 복구할까요?`)) return;
+  state.students = state.students.map((item) => item.id === studentId ? { ...item, status: "재원", restoredAt: Date.now(), retiredReason: "" } : item);
+  saveState();
+  renderAll();
+}
+
+function permanentlyDeleteStudent(studentId) {
+  const student = state.students.find((item) => item.id === studentId && item.status === "퇴원");
+  if (!student) return;
+  if (!confirm(`${student.name} 학생을 영구 삭제할까요?\n\n학생 정보와 연결된 출석·납부·상담·수업방 권한도 함께 삭제됩니다. 이 작업은 화면에서 되돌릴 수 없습니다.`)) return;
+  if (!confirm(`마지막 확인입니다.\n\n${student.name} 학생을 정말 영구 삭제하시겠습니까?\n삭제 직전에 전체 백업파일을 자동으로 내려받습니다.`)) return;
+
+  exportData();
+  state.students = state.students.filter((item) => item.id !== studentId);
+  delete state.consulting[studentId];
+  Object.values(state.attendance || {}).forEach((day) => delete day[studentId]);
+  Object.values(state.payments || {}).forEach((month) => delete month[studentId]);
+  state.classrooms = (state.classrooms || []).map((room) => {
+    const memberAccess = { ...(room.memberAccess || {}) };
+    delete memberAccess[studentId];
+    return { ...room, memberStudentIds: (room.memberStudentIds || []).filter((id) => id !== studentId), memberAccess };
+  });
+  state.newConsultations = (state.newConsultations || []).filter((record) => record.studentId !== studentId);
+  state.waitlist = (state.waitlist || []).filter((record) => record.studentId !== studentId);
+  saveState();
+  renderAll();
+  alert(`${student.name} 학생을 영구 삭제했습니다. 삭제 전 백업파일은 다운로드 폴더에 저장되었습니다.`);
 }
 
 function exportData() {
@@ -2551,7 +2924,9 @@ window.openDashboardStudents = openDashboardStudents;
 window.openDashboardClasses = openDashboardClasses;
 window.openDashboardPayments = openDashboardPayments;
 window.openDashboardAttendance = openDashboardAttendance;
-window.deleteStudent = deleteStudent;
+window.retireStudent = retireStudent;
+window.restoreStudent = restoreStudent;
+window.permanentlyDeleteStudent = permanentlyDeleteStudent;
 window.setAttendance = setAttendance;
 window.setAttendanceMakeupDate = setAttendanceMakeupDate;
 window.setPayment = setPayment;
@@ -2581,5 +2956,4 @@ window.openClassroomStudentList = openClassroomStudentList;
 window.editClassroomPost = editClassroomPost;
 window.deleteClassroomPost = deleteClassroomPost;
 window.openStudentClassroom = openStudentClassroom;
-
-setup();
+window.startOrchardOffice = setup;

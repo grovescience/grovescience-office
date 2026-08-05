@@ -6,7 +6,26 @@
     <title>과수원과학 교무실</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
+  <body class="auth-pending">
+    <main class="office-auth" id="officeAuth" aria-live="polite">
+      <section class="office-auth-card">
+        <img src="./assets/logo.png" alt="과수원과학 로고" />
+        <span>과수원과학 교무실</span>
+        <h1 id="authTitle">원장님 로그인</h1>
+        <p id="authDescription">등록된 관리자 계정으로 로그인해주세요.</p>
+        <form id="officeLoginForm" class="office-auth-form">
+          <label>아이디(이메일)<input id="officeAuthEmail" type="email" autocomplete="username" value="grovescience24@gmail.com" required /></label>
+          <label>비밀번호<input id="officeAuthPassword" type="password" autocomplete="current-password" required /></label>
+          <button class="primary-button" type="submit">교무실 로그인</button>
+        </form>
+        <form id="officePasswordForm" class="office-auth-form" hidden>
+          <label>새 비밀번호<input id="officeNewPassword" type="password" autocomplete="new-password" minlength="10" required /></label>
+          <label>새 비밀번호 확인<input id="officeNewPasswordConfirm" type="password" autocomplete="new-password" minlength="10" required /></label>
+          <button class="primary-button" type="submit">새 비밀번호 저장</button>
+        </form>
+        <p class="auth-message" id="officeAuthMessage">로그인 보안을 준비하고 있습니다.</p>
+      </section>
+    </main>
     <div class="app-shell">
       <aside class="sidebar">
         <div class="brand">
@@ -54,6 +73,7 @@
             <h1 id="pageTitle">대시보드</h1>
           </div>
           <div class="top-actions">
+            <button class="ghost-button" id="officeLogoutBtn" type="button" hidden>로그아웃</button>
             <button class="ghost-button" id="exportDataBtn" data-export-data type="button">자료 백업</button>
             <button class="ghost-button" id="exportOnlineClassroomBtn" type="button">온라인 수업방 만들기</button>
             <label class="ghost-button file-button">
@@ -65,6 +85,30 @@
         </header>
 
         <section class="view active" id="dashboard">
+          <section class="panel schedule-panel">
+            <div class="panel-heading schedule-heading">
+              <div>
+                <h2>학원 일정 달력</h2>
+                <span>반 수업은 자동 표시되고, 행사·상담·휴원 일정은 직접 추가할 수 있습니다.</span>
+              </div>
+              <div class="calendar-controls">
+                <button class="mini-button" id="calendarPrevBtn" type="button">이전 달</button>
+                <strong id="calendarMonthLabel"></strong>
+                <button class="mini-button" id="calendarTodayBtn" type="button">오늘</button>
+                <button class="mini-button" id="calendarNextBtn" type="button">다음 달</button>
+              </div>
+            </div>
+            <div class="academy-calendar" id="academyCalendar"></div>
+            <div class="schedule-editor">
+              <label class="field-label">일자<input id="scheduleDateInput" type="date" /></label>
+              <label class="field-label">구분<select id="scheduleTypeInput"><option>학원 행사</option><option>상담</option><option>휴원</option><option>기타</option></select></label>
+              <label class="field-label">일정명<input id="scheduleTitleInput" placeholder="예: 여름방학 휴원" /></label>
+              <label class="field-label wide">메모<input id="scheduleMemoInput" placeholder="선택 사항" /></label>
+              <button class="primary-button" id="addScheduleBtn" type="button">일정 추가</button>
+            </div>
+            <div class="schedule-agenda" id="scheduleAgenda"></div>
+          </section>
+
           <div class="notice">
             <strong>학생은 한 번만 등록하면 됩니다</strong>
             <span>학생관리에서 학생 이름과 수강반을 저장하면 출석관리, 납부관리, 교재관리, 숙제관리, 상담기록에 자동으로 나타납니다.</span>
@@ -122,6 +166,7 @@
               </div>
             </section>
           </div>
+
         </section>
 
         <section class="view" id="students">
@@ -129,24 +174,36 @@
             <strong>여기가 기준 명단입니다</strong>
             <span>학생은 이 화면에서만 추가하면 됩니다. 다른 탭은 이 명단을 자동으로 가져다 씁니다.</span>
           </div>
+          <div class="student-list-tabs" aria-label="학생 명단 구분">
+            <button class="active" type="button" data-student-list="active">재원생 명단</button>
+            <button type="button" data-student-list="paused">휴원생 명단</button>
+            <button type="button" data-student-list="retired">퇴원생 명단</button>
+          </div>
+          <div class="student-sort-row">
+            <strong>정렬</strong>
+            <div class="student-sort-tabs" aria-label="등록 순서 정렬">
+              <button class="active" type="button" data-student-sort="oldest">등록 오래된순</button>
+              <button type="button" data-student-sort="newest">최근 등록순</button>
+            </div>
+            <span>등록한 날짜를 기준으로 순서를 바꿉니다.</span>
+          </div>
           <div class="toolbar">
             <label class="search-box">
               <span>검색</span>
               <input id="studentSearch" type="search" placeholder="이름, 학교, 반 검색" />
             </label>
             <select id="classFilter" aria-label="반 필터"></select>
-            <select id="statusFilter" aria-label="상태 필터">
-              <option value="전체">전체 상태</option>
-              <option value="재원">재원</option>
-              <option value="상담중">상담중</option>
-              <option value="휴원">휴원</option>
-              <option value="퇴원">퇴원</option>
-            </select>
+              <select id="statusFilter" aria-label="상태 필터">
+                <option value="전체">전체 상태</option>
+                <option value="재원">재원</option>
+                <option value="상담중">상담중</option>
+              </select>
+            <button class="ghost-button warning-button" id="finishSpecialClassBtn" type="button" hidden>특강 종료 학생 퇴원 처리</button>
           </div>
 
           <section class="panel">
             <div class="panel-heading">
-              <h2>학생 목록</h2>
+              <h2 id="studentListTitle">재원생 목록</h2>
               <span id="studentCountLabel">0명</span>
             </div>
             <div class="table-wrap">
@@ -297,7 +354,7 @@
           </div>
 
           <div class="section-split classroom-admin-grid">
-            <section class="panel">
+            <section class="panel classroom-editor-panel">
               <div class="panel-heading">
                 <h2>수업방 만들기/수정</h2>
                 <span id="classroomFormMode">새 수업방</span>
@@ -343,7 +400,7 @@
               </div>
             </section>
 
-            <section class="panel">
+            <section class="panel classroom-list-panel">
               <div class="panel-heading">
                 <h2>수업방 목록</h2>
                 <span id="classroomCountLabel">0개</span>
@@ -370,6 +427,10 @@
                   <option>숙제</option>
                   <option>유튜브 링크</option>
                 </select>
+              </label>
+              <label class="field-label">
+                수업일자
+                <input id="classroomPostLessonDateInput" type="date" />
               </label>
               <label class="field-label check-field">
                 공개 범위
@@ -402,8 +463,8 @@
 
         <section class="view" id="classroomStudent">
           <div class="notice">
-            <strong>학생은 허용된 수업방만 볼 수 있습니다</strong>
-            <span>수업방 관리에서 “학생용 사이트에 공개”를 체크한 수업방만 학생에게 보입니다.</span>
+            <strong>관리자용 학생 화면 미리보기입니다</strong>
+            <span>원장님은 비공개·이용 전·기간 종료 수업방도 확인할 수 있습니다. 실제 학생 사이트에서는 설정한 공개 범위와 이용기간이 적용됩니다.</span>
           </div>
 
           <section class="panel student-room-login" id="studentRoomLogin">
@@ -416,11 +477,8 @@
                 학생
                 <select id="studentRoomLoginSelect"></select>
               </label>
-              <label class="field-label">
-                수업방 개인코드
-                <input id="studentRoomCodeInput" maxlength="8" placeholder="예: A7K29Q" />
-              </label>
-              <button class="primary-button" id="studentRoomLoginBtn" type="button">입장</button>
+              <input id="studentRoomCodeInput" type="hidden" />
+              <button class="primary-button" id="studentRoomLoginBtn" type="button">관리자 미리보기</button>
             </div>
           </section>
 
@@ -575,6 +633,7 @@
                 <span>재원생 상담, 전달사항</span>
               </div>
               <div class="toolbar">
+                <select id="consultingClass" aria-label="상담 반 선택"></select>
                 <select id="consultingStudent" aria-label="상담 학생 선택"></select>
                 <input id="consultingDate" type="date" />
               </div>
@@ -647,6 +706,14 @@
                 <input id="waitDate" type="date" />
               </label>
               <select id="waitClass"></select>
+              <label class="check-field wait-auto-field">
+                <input id="waitAutoAdvance" type="checkbox" />
+                해가 바뀌면 학년·대기반 자동 올림
+              </label>
+              <label class="field-label" id="waitNextClassWrap" hidden>
+                다음 해 대기반
+                <select id="waitNextClass"></select>
+              </label>
               <label class="field-label">
                 자리 안내일
                 <input id="waitNoticeDate" type="date" />
@@ -713,9 +780,13 @@
             </select>
           </label>
           <label>
-            수강반 수정
+            정규반
             <select id="classInput"></select>
           </label>
+          <fieldset class="wide special-class-fieldset">
+            <legend>특강반 <span>여러 개 선택 가능</span></legend>
+            <div class="special-class-checks" id="specialClassChecks"></div>
+          </fieldset>
           <label>
             학생 연락처
             <input id="studentPhoneInput" placeholder="010-0000-0000" />
@@ -810,6 +881,8 @@
     </dialog>
     <datalist id="schoolOptions"></datalist>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./app.js"></script>
+    <script src="./auth.js"></script>
   </body>
 </html>

@@ -18,7 +18,10 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--light);
+  background:
+    radial-gradient(circle at 12% 10%, rgba(244, 160, 51, 0.13), transparent 28%),
+    radial-gradient(circle at 88% 90%, rgba(43, 102, 61, 0.12), transparent 32%),
+    var(--light);
   color: var(--ink);
   font-family: "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
 }
@@ -46,8 +49,8 @@ select {
 
 .login-panel {
   max-width: 520px;
-  margin: 40px auto;
-  padding: 24px;
+  margin: 7vh auto 40px;
+  padding: 32px;
   display: grid;
   gap: 16px;
 }
@@ -113,6 +116,35 @@ button {
   color: #fff;
   font-weight: 800;
   cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.login-message {
+  min-height: 20px;
+  margin: -5px 0 0;
+  color: #a23f32;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.privacy-note {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 3px solid rgba(244, 160, 51, 0.45);
+  outline-offset: 2px;
 }
 
 .room-shell {
@@ -238,5 +270,14 @@ button {
 
   .room-header {
     align-items: flex-start;
+  }
+
+  .student-app {
+    padding: 16px 12px;
+  }
+
+  .login-panel {
+    margin-top: 18px;
+    padding: 22px 18px;
   }
 }

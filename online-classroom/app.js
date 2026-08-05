@@ -1,6 +1,6 @@
 const data = window.CLASSROOM_DATA || { students: [], classrooms: [] };
-let currentStudentName = localStorage.getItem("gwaseuwonClassroomStudentName") || "";
-let currentStudentCode = localStorage.getItem("gwaseuwonClassroomStudentCode") || "";
+let currentStudentName = "";
+let currentStudentCode = "";
 let currentStudentData = null;
 let currentRoomId = "";
 
@@ -49,25 +49,38 @@ function formatDateTime(value) {
   return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
+function formatLessonDate(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" }).format(new Date(`${value}T00:00:00`));
+}
+
 function setup() {
   $("#loginBtn").addEventListener("click", login);
   $("#logoutBtn").addEventListener("click", logout);
-  if (currentStudentName && currentStudentCode) {
-    loadStudentData(currentStudentName, currentStudentCode);
-  }
+  ["#studentNameInput", "#studentCodeInput"].forEach((selector) => {
+    $(selector).addEventListener("keydown", (event) => {
+      if (event.key === "Enter") login();
+    });
+  });
+  $("#studentCodeInput").addEventListener("input", (event) => {
+    event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  });
 }
 
 async function login() {
   const name = $("#studentNameInput").value.trim();
   const code = $("#studentCodeInput").value.trim().toUpperCase();
+  $("#loginMessage").textContent = "";
   await loadStudentData(name, code);
 }
 
 async function loadStudentData(name, code) {
   if (!name || !code) {
-    alert("학생 이름 또는 수업방 개인코드가 맞지 않습니다.");
+    $("#loginMessage").textContent = "학생 이름과 개인코드를 모두 입력해 주세요.";
     return;
   }
+  $("#loginBtn").disabled = true;
+  $("#loginBtn").textContent = "확인하고 있어요…";
   try {
     const response = await fetch(`./student-data/${encodeURIComponent(code)}.json`, { cache: "no-store" });
     if (!response.ok) throw new Error("student data not found");
@@ -77,17 +90,16 @@ async function loadStudentData(name, code) {
     currentStudentCode = code;
     currentStudentData = studentData;
     currentRoomId = "";
-    localStorage.setItem("gwaseuwonClassroomStudentName", currentStudentName);
-    localStorage.setItem("gwaseuwonClassroomStudentCode", currentStudentCode);
     renderStudentRoom();
   } catch (error) {
     currentStudentData = null;
-    localStorage.removeItem("gwaseuwonClassroomStudentName");
-    localStorage.removeItem("gwaseuwonClassroomStudentCode");
     $("#loginPanel").hidden = false;
     $("#roomShell").hidden = true;
-    alert("학생 이름 또는 수업방 개인코드가 맞지 않습니다.");
+    $("#loginMessage").textContent = "학생 이름 또는 개인코드가 맞지 않습니다. 다시 확인해 주세요.";
     return;
+  } finally {
+    $("#loginBtn").disabled = false;
+    $("#loginBtn").textContent = "입장하기";
   }
 }
 
@@ -96,10 +108,9 @@ function logout() {
   currentStudentCode = "";
   currentStudentData = null;
   currentRoomId = "";
-  localStorage.removeItem("gwaseuwonClassroomStudentName");
-  localStorage.removeItem("gwaseuwonClassroomStudentCode");
   $("#studentNameInput").value = "";
   $("#studentCodeInput").value = "";
+  $("#loginMessage").textContent = "안전하게 로그아웃했습니다.";
   $("#loginPanel").hidden = false;
   $("#roomShell").hidden = true;
 }
@@ -169,7 +180,7 @@ function renderPost(post) {
     <article class="post-card">
       <div class="post-head">
         <span class="badge ${post.type === "숙제" ? "orange" : ""}">${post.type || "공지"}</span>
-        <small>${formatDateTime(post.createdAt)}</small>
+        <small>${post.lessonDate ? `수업일 ${formatLessonDate(post.lessonDate)} · ` : ""}${formatDateTime(post.createdAt)}</small>
       </div>
       <strong>${post.title}</strong>
       <p>${post.content || ""}</p>
