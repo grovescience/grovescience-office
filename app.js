@@ -318,9 +318,11 @@ function queueServerSave() {
 
 async function saveStateToServer() {
   try {
+    const { data } = await window.officeAuthClient?.auth?.getSession?.() || { data: {} };
+    const accessToken = data?.session?.access_token || "";
     await fetch("./api/state", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
       body: JSON.stringify({ ...state, savedAt: new Date().toISOString() }),
     });
   } catch (error) {
@@ -331,7 +333,9 @@ async function saveStateToServer() {
 async function syncStateFromServer() {
   if (!window.fetch) return;
   try {
-    const response = await fetch("./api/state", { cache: "no-store" });
+    const { data } = await window.officeAuthClient?.auth?.getSession?.() || { data: {} };
+    const accessToken = data?.session?.access_token || "";
+    const response = await fetch("./api/state", { cache: "no-store", headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} });
     if (!response.ok) return;
     const serverState = normalizeState(await response.json());
     const localCount = state.students.length;
@@ -2798,6 +2802,8 @@ function openStudentDialog(studentId = "") {
   $("#studentPhoneInput").value = student?.studentPhone || "";
   $("#parentPhoneInput").value = student?.parentPhone || "";
   $("#classroomCodeInput").value = student?.classroomCode || "";
+  $("#studentLoginIdInput").value = student?.loginId || "";
+  $("#studentTempPasswordInput").value = "";
   $("#subjectInput").value = student?.subject || classInfo?.subject || "";
   $("#bookInput").value = student?.book || classInfo?.defaultBook || "";
   $("#homeworkInput").value = student?.homework || "";
@@ -2808,7 +2814,7 @@ function openStudentDialog(studentId = "") {
   $("#studentDialog").showModal();
 }
 
-function saveStudentFromForm() {
+async function saveStudentFromForm() {
   const id = $("#studentId").value || crypto.randomUUID();
   const existing = state.students.find((student) => student.id === id);
   const classInfo = getClassInfo($("#classInput").value);
@@ -2826,6 +2832,7 @@ function saveStudentFromForm() {
     studentPhone: $("#studentPhoneInput").value.trim(),
     parentPhone: $("#parentPhoneInput").value.trim(),
     classroomCode,
+    loginId: $("#studentLoginIdInput").value.trim().toLowerCase(),
     subject: $("#subjectInput").value.trim() || classInfo?.subject || "",
     book: $("#bookInput").value.trim() || classInfo?.defaultBook || "",
     homework: $("#homeworkInput").value.trim(),
@@ -2844,6 +2851,25 @@ function saveStudentFromForm() {
   }
 
   saveState();
+  const temporaryPassword = $("#studentTempPasswordInput").value;
+  if (student.loginId && temporaryPassword) {
+    try {
+      const { data } = await window.officeAuthClient?.auth?.getSession?.() || { data: {} };
+      const accessToken = data?.session?.access_token || "";
+      if (!accessToken) throw new Error("온라인 관리자 로그인이 필요합니다.");
+      const response = await fetch("./api/student-accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ studentId: student.id, loginId: student.loginId, password: temporaryPassword }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "학생 계정을 만들지 못했습니다.");
+      await saveStateToServer();
+      alert(`${student.name} 학생 계정을 만들었습니다.\n아이디: ${student.loginId}\n비밀번호는 학생에게 개별 전달해주세요.`);
+    } catch (error) {
+      alert(`학생 정보는 저장했지만 로그인 계정은 만들지 못했습니다.\n${error.message}`);
+    }
+  }
   $("#studentDialog").close();
   renderAll();
 }

@@ -58,6 +58,7 @@
       client = window.supabase.createClient(config.url, config.publishableKey, {
         auth: { detectSessionInUrl: true, persistSession: true },
       });
+      window.officeAuthClient = client;
 
       const params = new URLSearchParams(location.hash.replace(/^#/, ""));
       const authType = params.get("type");

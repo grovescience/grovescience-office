@@ -800,6 +800,15 @@
             <input id="classroomCodeInput" maxlength="8" placeholder="비워두면 자동 생성" />
           </label>
           <label>
+            학생 로그인 아이디
+            <input id="studentLoginIdInput" minlength="4" maxlength="30" autocomplete="off" placeholder="예: orchard24001" />
+          </label>
+          <label>
+            임시 비밀번호
+            <input id="studentTempPasswordInput" type="password" minlength="10" autocomplete="new-password" placeholder="계정 발급·변경할 때만 입력" />
+            <small>10자 이상. 저장 후 화면이나 백업 파일에는 남지 않습니다.</small>
+          </label>
+          <label>
             과목
             <select id="subjectInput">
               <option>실험과학</option>

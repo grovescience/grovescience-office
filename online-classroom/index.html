@@ -18,19 +18,19 @@
         </div>
         <div class="notice">
           <strong>내 수업방만 확인할 수 있습니다</strong>
-          <span>학생 이름과 선생님이 알려준 개인코드를 입력하세요.</span>
+          <span>선생님이 알려준 학생 아이디와 비밀번호를 입력하세요.</span>
         </div>
         <label>
-          학생 이름
-          <input id="studentNameInput" autocomplete="name" placeholder="학생 이름 입력" />
+          학생 아이디
+          <input id="studentNameInput" autocomplete="username" placeholder="학생 아이디 입력" />
         </label>
         <label>
-          수업방 개인코드
-          <input id="studentCodeInput" maxlength="8" autocomplete="one-time-code" inputmode="text" placeholder="6자리 개인코드" />
+          비밀번호
+          <input id="studentCodeInput" type="password" autocomplete="current-password" placeholder="비밀번호 입력" />
         </label>
         <button id="loginBtn" type="button">입장하기</button>
         <p class="login-message" id="loginMessage" role="status" aria-live="polite"></p>
-        <p class="privacy-note">개인코드는 다른 사람에게 알려주지 마세요. 공용 기기에서는 사용 후 꼭 로그아웃해 주세요.</p>
+        <p class="privacy-note">아이디와 비밀번호는 다른 사람에게 알려주지 마세요. 공용 기기에서는 사용 후 꼭 로그아웃해 주세요.</p>
       </section>
 
       <section class="room-shell" id="roomShell" hidden>
@@ -60,7 +60,7 @@
       </section>
     </main>
 
-    <script src="./classroom-data.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./app.js"></script>
   </body>
 </html>

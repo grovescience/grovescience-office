@@ -1,4 +1,6 @@
-const data = window.CLASSROOM_DATA || { students: [], classrooms: [] };
+let supabaseClient = null;
+let supabaseUrl = "";
+let supabasePublishableKey = "";
 let currentStudentName = "";
 let currentStudentCode = "";
 let currentStudentData = null;
@@ -54,7 +56,7 @@ function formatLessonDate(value) {
   return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" }).format(new Date(`${value}T00:00:00`));
 }
 
-function setup() {
+async function setup() {
   $("#loginBtn").addEventListener("click", login);
   $("#logoutBtn").addEventListener("click", logout);
   ["#studentNameInput", "#studentCodeInput"].forEach((selector) => {
@@ -62,40 +64,45 @@ function setup() {
       if (event.key === "Enter") login();
     });
   });
-  $("#studentCodeInput").addEventListener("input", (event) => {
-    event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  });
+  try {
+    const response = await fetch("./api/auth-config", { cache: "no-store" });
+    const config = await response.json();
+    if (!response.ok || !config.url || !config.publishableKey) throw new Error();
+    supabaseUrl = config.url;
+    supabasePublishableKey = config.publishableKey;
+    supabaseClient = window.supabase.createClient(supabaseUrl, supabasePublishableKey, { auth: { persistSession: true } });
+    const { data } = await supabaseClient.auth.getSession();
+    if (data.session) await loadPortal(data.session);
+  } catch (error) {
+    $("#loginMessage").textContent = "학습방 연결을 준비하지 못했습니다. 선생님께 문의해 주세요.";
+  }
 }
 
 async function login() {
-  const name = $("#studentNameInput").value.trim();
-  const code = $("#studentCodeInput").value.trim().toUpperCase();
+  const name = $("#studentNameInput").value.trim().toLowerCase();
+  const code = $("#studentCodeInput").value;
   $("#loginMessage").textContent = "";
   await loadStudentData(name, code);
 }
 
 async function loadStudentData(name, code) {
   if (!name || !code) {
-    $("#loginMessage").textContent = "학생 이름과 개인코드를 모두 입력해 주세요.";
+    $("#loginMessage").textContent = "학생 아이디와 비밀번호를 모두 입력해 주세요.";
     return;
   }
   $("#loginBtn").disabled = true;
   $("#loginBtn").textContent = "확인하고 있어요…";
   try {
-    const response = await fetch(`./student-data/${encodeURIComponent(code)}.json`, { cache: "no-store" });
-    if (!response.ok) throw new Error("student data not found");
-    const studentData = await response.json();
-    if (String(studentData.student?.name || "").trim() !== name) throw new Error("student name mismatch");
-    currentStudentName = name;
-    currentStudentCode = code;
-    currentStudentData = studentData;
-    currentRoomId = "";
-    renderStudentRoom();
+    if (!supabaseClient) throw new Error("not ready");
+    const email = `${name.replace(/[^a-z0-9_-]/g, "")}@student.grovescience.local`;
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: code });
+    if (error || !data.session) throw error || new Error("login failed");
+    await loadPortal(data.session);
   } catch (error) {
     currentStudentData = null;
     $("#loginPanel").hidden = false;
     $("#roomShell").hidden = true;
-    $("#loginMessage").textContent = "학생 이름 또는 개인코드가 맞지 않습니다. 다시 확인해 주세요.";
+    $("#loginMessage").textContent = "학생 아이디 또는 비밀번호가 맞지 않습니다. 다시 확인해 주세요.";
     return;
   } finally {
     $("#loginBtn").disabled = false;
@@ -103,7 +110,23 @@ async function loadStudentData(name, code) {
   }
 }
 
-function logout() {
+async function loadPortal(session) {
+  const response = await fetch(`${supabaseUrl}/rest/v1/student_portals?select=payload&auth_user_id=eq.${session.user.id}`, {
+    cache: "no-store",
+    headers: { apikey: supabasePublishableKey, Authorization: `Bearer ${session.access_token}` },
+  });
+  if (!response.ok) throw new Error("portal unavailable");
+  const rows = await response.json();
+  if (!rows[0]?.payload?.student) throw new Error("portal not assigned");
+  currentStudentData = rows[0].payload;
+  currentStudentName = currentStudentData.student.name;
+  currentStudentCode = "";
+  currentRoomId = "";
+  renderStudentRoom();
+}
+
+async function logout() {
+  await supabaseClient?.auth.signOut();
   currentStudentName = "";
   currentStudentCode = "";
   currentStudentData = null;
