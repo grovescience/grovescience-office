@@ -320,13 +320,15 @@ async function saveStateToServer() {
   try {
     const { data } = await window.officeAuthClient?.auth?.getSession?.() || { data: {} };
     const accessToken = data?.session?.access_token || "";
-    await fetch("./api/state", {
+    const response = await fetch("./api/state", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
       body: JSON.stringify({ ...state, savedAt: new Date().toISOString() }),
     });
+    return response.ok;
   } catch (error) {
     // 로컬 파일 저장 서버가 꺼져 있으면 브라우저 저장만 유지합니다.
+    return false;
   }
 }
 
@@ -2928,14 +2930,15 @@ function importData(event) {
   const file = event.target.files?.[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       const imported = JSON.parse(String(reader.result || "{}"));
       const result = mergeImportedState(state, imported);
       state = result.state;
       saveState();
       renderAll();
-      alert(`자료를 합쳤습니다.\n새로 추가: ${result.added}명\n기존 업데이트: ${result.updated}명`);
+      const onlineSaved = await saveStateToServer();
+      alert(`자료를 합쳤습니다.\n새로 추가: ${result.added}명\n기존 업데이트: ${result.updated}명\n온라인 저장: ${onlineSaved ? "완료" : "실패 - 원본은 이 컴퓨터에 안전하게 남아 있습니다"}`);
     } catch (error) {
       alert("자료 파일을 읽을 수 없습니다. 과수원과학 교무실에서 백업한 파일인지 확인해주세요.");
     } finally {
