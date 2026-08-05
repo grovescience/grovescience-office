@@ -37,6 +37,7 @@ let selectedStudentList = "active";
 let selectedStudentSort = "oldest";
 let serverSaveTimer = null;
 let syncingFromServer = false;
+let lastServerSaveError = "";
 let currentStudentRoomStudentId = localStorage.getItem("orchardScienceClassroomStudentId") || "";
 let currentStudentRoomId = "";
 let classroomMemberSelection = new Set();
@@ -317,6 +318,7 @@ function queueServerSave() {
 }
 
 async function saveStateToServer() {
+  lastServerSaveError = "";
   try {
     const { data } = await window.officeAuthClient?.auth?.getSession?.() || { data: {} };
     const accessToken = data?.session?.access_token || "";
@@ -325,9 +327,15 @@ async function saveStateToServer() {
       headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
       body: JSON.stringify({ ...state, savedAt: new Date().toISOString() }),
     });
-    return response.ok;
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      lastServerSaveError = result.error || `서버 응답 ${response.status}`;
+      return false;
+    }
+    return true;
   } catch (error) {
     // 로컬 파일 저장 서버가 꺼져 있으면 브라우저 저장만 유지합니다.
+    lastServerSaveError = error.message || "서버에 연결하지 못했습니다.";
     return false;
   }
 }
@@ -2938,7 +2946,7 @@ function importData(event) {
       saveState();
       renderAll();
       const onlineSaved = await saveStateToServer();
-      alert(`자료를 합쳤습니다.\n새로 추가: ${result.added}명\n기존 업데이트: ${result.updated}명\n온라인 저장: ${onlineSaved ? "완료" : "실패 - 원본은 이 컴퓨터에 안전하게 남아 있습니다"}`);
+      alert(`자료를 합쳤습니다.\n새로 추가: ${result.added}명\n기존 업데이트: ${result.updated}명\n온라인 저장: ${onlineSaved ? "완료" : `실패 - ${lastServerSaveError || "원인을 확인하고 있습니다"}\n원본은 이 컴퓨터에 안전하게 남아 있습니다`}`);
     } catch (error) {
       alert("자료 파일을 읽을 수 없습니다. 과수원과학 교무실에서 백업한 파일인지 확인해주세요.");
     } finally {
