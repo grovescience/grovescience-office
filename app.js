@@ -747,7 +747,6 @@ function bindEvents() {
   $("#exportOnlineClassroomBtn").addEventListener("click", exportOnlineClassroom);
   $("#bulkStudentAccountsBtn").addEventListener("click", provisionAllStudentAccounts);
   $("#closeMemberDialogBtn").addEventListener("click", () => $("#memberDialog").close());
-  $("#copyMemberCodesBtn").addEventListener("click", copyMemberDialogCodes);
   $("#calendarPrevBtn").addEventListener("click", () => { calendarCursor.setMonth(calendarCursor.getMonth() - 1); renderScheduleCalendar(); });
   $("#calendarNextBtn").addEventListener("click", () => { calendarCursor.setMonth(calendarCursor.getMonth() + 1); renderScheduleCalendar(); });
   $("#calendarTodayBtn").addEventListener("click", () => { calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1); selectScheduleDate(today()); });
@@ -1124,10 +1123,7 @@ function openMemberDialog(title, students) {
               <td><strong>${student.name}</strong></td>
               <td>${student.school || "-"}<br>${student.grade || "-"}</td>
               <td>${student.className || "-"}</td>
-              <td>
-                <strong>${student.loginId || "미발급"}</strong><br>
-                <button class="code-copy-button" type="button" onclick="copyClassroomCode('${student.id}')">수업방 ${student.classroomCode || "-"}</button>
-              </td>
+              <td><strong>${student.loginId || "미발급"}</strong></td>
             </tr>
           `,
         )
@@ -1245,7 +1241,7 @@ function renderStudents() {
               <td>${student.school || "-"}<br>${student.grade || "-"}</td>
               <td>${formatStudentClasses(student)}<span class="muted-text">${classInfo?.frequency || "-"}</span></td>
               <td>학생 ${student.studentPhone || "-"}<br>학부모 ${student.parentPhone || "-"}</td>
-              <td><button class="code-copy-button" type="button" onclick="copyClassroomCode('${student.id}')">${student.classroomCode || "-"}</button></td>
+              <td><strong>${student.loginId || "미발급"}</strong></td>
               <td>${student.book || "-"}<br><span class="muted-text">숙제: ${getHomeworkText(student) || "없음"} / ${student.homeworkStatus || "확인 전"}</span></td>
               <td>
                 <div class="row-actions">
@@ -2529,7 +2525,7 @@ function renderClassroomList() {
               </div>
               <div class="row-actions">
                 <button class="mini-button" type="button" onclick="openClassroomPosts('${room.id}')">게시글</button>
-                <button class="mini-button" type="button" onclick="openClassroomStudentList('${room.id}')">학생/코드</button>
+                <button class="mini-button" type="button" onclick="openClassroomStudentList('${room.id}')">학생 명단</button>
                 <button class="mini-button" type="button" onclick="editClassroom('${room.id}')">수정</button>
                 <button class="mini-button danger" type="button" onclick="deleteClassroom('${room.id}')">삭제</button>
               </div>

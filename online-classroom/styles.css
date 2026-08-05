@@ -161,7 +161,35 @@ a:focus-visible {
 }
 
 .room-header button {
-  width: 88px;
+  width: auto;
+  padding: 0 16px;
+  background: #eef4e9;
+  color: var(--green);
+}
+
+.room-actions,
+.password-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.password-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.password-panel > strong,
+.password-panel .password-actions,
+.password-panel .login-message {
+  grid-column: 1 / -1;
+}
+
+.secondary-button {
   background: #eef4e9;
   color: var(--green);
 }
@@ -270,6 +298,11 @@ a:focus-visible {
 
   .room-header {
     align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .password-panel {
+    grid-template-columns: 1fr;
   }
 
   .student-app {

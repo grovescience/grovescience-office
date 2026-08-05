@@ -65,6 +65,12 @@ function getClassroomLinkLabel(link, index = 0) {
 async function setup() {
   $("#loginBtn").addEventListener("click", login);
   $("#logoutBtn").addEventListener("click", logout);
+  $("#passwordChangeBtn").addEventListener("click", () => {
+    $("#passwordChangeForm").hidden = !$("#passwordChangeForm").hidden;
+    $("#passwordChangeMessage").textContent = "";
+  });
+  $("#passwordChangeCancelBtn").addEventListener("click", closePasswordChange);
+  $("#passwordChangeForm").addEventListener("submit", changePassword);
   ["#studentNameInput", "#studentCodeInput"].forEach((selector) => {
     $(selector).addEventListener("keydown", (event) => {
       if (event.key === "Enter") login();
@@ -142,6 +148,35 @@ async function logout() {
   $("#loginMessage").textContent = "안전하게 로그아웃했습니다.";
   $("#loginPanel").hidden = false;
   $("#roomShell").hidden = true;
+  closePasswordChange();
+}
+
+function closePasswordChange() {
+  $("#passwordChangeForm").hidden = true;
+  $("#currentPasswordInput").value = "";
+  $("#newPasswordInput").value = "";
+  $("#newPasswordConfirmInput").value = "";
+  $("#passwordChangeMessage").textContent = "";
+}
+
+async function changePassword(event) {
+  event.preventDefault();
+  const currentPassword = $("#currentPasswordInput").value;
+  const newPassword = $("#newPasswordInput").value;
+  const confirmation = $("#newPasswordConfirmInput").value;
+  const message = $("#passwordChangeMessage");
+  if (newPassword.length < 10) return message.textContent = "새 비밀번호는 10자 이상으로 만들어 주세요.";
+  if (newPassword !== confirmation) return message.textContent = "새 비밀번호 두 개가 서로 다릅니다.";
+  const { data } = await supabaseClient.auth.getSession();
+  const email = data.session?.user?.email;
+  if (!email) return message.textContent = "로그인 상태를 확인할 수 없습니다.";
+  message.textContent = "비밀번호를 확인하고 있습니다…";
+  const { error: signInError } = await supabaseClient.auth.signInWithPassword({ email, password: currentPassword });
+  if (signInError) return message.textContent = "현재 비밀번호가 맞지 않습니다.";
+  const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+  if (error) return message.textContent = "비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+  alert("비밀번호가 변경되었습니다. 다음 로그인부터 새 비밀번호를 사용하세요.");
+  closePasswordChange();
 }
 
 function getAllowedRooms() {

@@ -796,10 +796,7 @@
             학부모 연락처
             <input id="parentPhoneInput" placeholder="010-0000-0000" />
           </label>
-          <label>
-            수업방 개인코드
-            <input id="classroomCodeInput" maxlength="8" placeholder="비워두면 자동 생성" />
-          </label>
+          <input id="classroomCodeInput" type="hidden" />
           <label>
             학생 로그인 아이디
             <input id="studentLoginIdInput" minlength="4" maxlength="30" autocomplete="off" placeholder="예: orchard24001" />
@@ -866,13 +863,12 @@
         <div class="dialog-heading">
           <div>
             <h2 id="memberDialogTitle">학생 명단</h2>
-            <p id="memberDialogHint">학생별 수업방 개인코드를 확인하고 복사할 수 있습니다.</p>
+            <p id="memberDialogHint">수업방에 연결된 학생과 로그인 아이디를 확인할 수 있습니다.</p>
           </div>
           <button class="icon-button" id="closeMemberDialogBtn" aria-label="닫기" type="button">×</button>
         </div>
         <div class="member-dialog-actions">
           <span id="memberDialogCount">0명</span>
-          <button class="ghost-button" id="copyMemberCodesBtn" type="button">명단 코드 전체 복사</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -881,7 +877,7 @@
                 <th>학생</th>
                 <th>학교/학년</th>
                 <th>수강반</th>
-                <th>수업방 코드</th>
+                <th>로그인 아이디</th>
               </tr>
             </thead>
             <tbody id="memberDialogTable"></tbody>
