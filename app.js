@@ -2885,10 +2885,10 @@ async function exportOnlineClassroom() {
     });
     if (!response.ok) throw new Error("online export failed");
     const result = await response.json();
-    alert(`온라인 수업방 파일을 만들었습니다.\n\n폴더: ${result.folder}\n압축파일: ${result.zip}\n\nNetlify에는 압축파일을 올리면 됩니다.`);
+    alert(`과수원ON 백업파일을 만들었습니다.\n\n폴더: ${result.folder}\n압축파일: ${result.zip}\n\n이 파일은 기존 Netlify 수동 배포용 백업입니다.`);
   } catch (error) {
     downloadOnlineClassroomData(buildOnlineClassroomData(state));
-    alert("서버 저장을 사용할 수 없어 온라인 자료 파일만 다운로드했습니다. classroom-data.js 파일을 온라인 수업방 폴더에 넣어주세요.");
+    alert("서버 저장을 사용할 수 없어 과수원ON 자료 파일만 다운로드했습니다. classroom-data.js 파일을 기존 수동 배포 폴더에 넣어주세요.");
   }
 }
 
