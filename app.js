@@ -745,6 +745,7 @@ function bindEvents() {
   $("#studentRoomLoginBtn").addEventListener("click", loginStudentRoom);
   $("#studentRoomLogoutBtn").addEventListener("click", logoutStudentRoom);
   $("#exportOnlineClassroomBtn").addEventListener("click", exportOnlineClassroom);
+  $("#bulkStudentAccountsBtn").addEventListener("click", provisionAllStudentAccounts);
   $("#closeMemberDialogBtn").addEventListener("click", () => $("#memberDialog").close());
   $("#copyMemberCodesBtn").addEventListener("click", copyMemberDialogCodes);
   $("#calendarPrevBtn").addEventListener("click", () => { calendarCursor.setMonth(calendarCursor.getMonth() - 1); renderScheduleCalendar(); });
@@ -1123,7 +1124,10 @@ function openMemberDialog(title, students) {
               <td><strong>${student.name}</strong></td>
               <td>${student.school || "-"}<br>${student.grade || "-"}</td>
               <td>${student.className || "-"}</td>
-              <td><button class="code-copy-button" type="button" onclick="copyClassroomCode('${student.id}')">${student.classroomCode || "-"}</button></td>
+              <td>
+                <strong>${student.loginId || "미발급"}</strong><br>
+                <button class="code-copy-button" type="button" onclick="copyClassroomCode('${student.id}')">수업방 ${student.classroomCode || "-"}</button>
+              </td>
             </tr>
           `,
         )
@@ -1269,6 +1273,103 @@ async function copyClassroomCode(studentId) {
     alert(`${student.name} 학생 코드 ${message}를 복사했습니다.`);
   } catch (error) {
     prompt("아래 내용을 복사해서 보내세요.", message);
+  }
+}
+
+function generateTemporaryPassword(length = 12) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#";
+  const values = new Uint32Array(length);
+  crypto.getRandomValues(values);
+  return Array.from(values, (value) => alphabet[value % alphabet.length]).join("");
+}
+
+function makeUniqueLoginId(student, index, usedIds) {
+  const existing = String(student.loginId || "").trim().toLowerCase();
+  if (existing && !usedIds.has(existing)) {
+    usedIds.add(existing);
+    return existing;
+  }
+  let sequence = index + 1;
+  let candidate = "";
+  do {
+    candidate = `orchard26${String(sequence).padStart(3, "0")}`;
+    sequence += 1;
+  } while (usedIds.has(candidate));
+  usedIds.add(candidate);
+  return candidate;
+}
+
+function csvValue(value) {
+  const text = String(value ?? "");
+  const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+function downloadStudentCredentials(rows) {
+  const headers = ["학생 이름", "학년", "수강반", "로그인 아이디", "임시 비밀번호", "수업방 코드", "학생용 주소", "발급 결과"];
+  const csv = [headers, ...rows.map((row) => [row.name, row.grade, row.className, row.loginId, row.password, row.classroomCode, "https://grovescience-classroom.vercel.app/", row.status])]
+    .map((row) => row.map(csvValue).join(","))
+    .join("\r\n");
+  const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `과수원과학-학생로그인-발급명단-${today()}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function provisionAllStudentAccounts() {
+  const targets = sortStudentsByGradeName(state.students.filter((student) => student.status !== "퇴원"));
+  if (!targets.length) return alert("계정을 발급할 재원·휴원 학생이 없습니다.");
+  if (!confirm(`재원·휴원 학생 ${targets.length}명의 로그인 아이디와 임시 비밀번호를 자동 발급할까요?\n\n이미 발급된 학생도 비밀번호가 새로 변경되며, 전달용 CSV 파일이 한 번 다운로드됩니다.`)) return;
+  const { data } = await window.officeAuthClient?.auth?.getSession?.() || { data: {} };
+  const accessToken = data?.session?.access_token || "";
+  if (!accessToken) return alert("온라인 관리자 로그인이 필요합니다.");
+  const button = $("#bulkStudentAccountsBtn");
+  button.disabled = true;
+  const usedIds = new Set();
+  const accounts = targets.map((student, index) => ({
+    student,
+    loginId: makeUniqueLoginId(student, index, usedIds),
+    password: generateTemporaryPassword(),
+  }));
+  state.students = state.students.map((student) => {
+    const account = accounts.find((item) => item.student.id === student.id);
+    return account ? { ...student, loginId: account.loginId } : student;
+  });
+  ensureStudentClassroomCodes();
+  saveState();
+  const results = [];
+  try {
+    for (let index = 0; index < accounts.length; index += 1) {
+      const account = accounts[index];
+      button.textContent = `계정 발급 중 ${index + 1}/${accounts.length}`;
+      const response = await fetch("./api/student-accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ studentId: account.student.id, loginId: account.loginId, password: account.password }),
+      });
+      const result = await response.json().catch(() => ({}));
+      const current = state.students.find((student) => student.id === account.student.id) || account.student;
+      results.push({
+        name: current.name,
+        grade: current.grade,
+        className: getStudentClassNames(current).join(", "),
+        loginId: account.loginId,
+        password: response.ok ? account.password : "",
+        classroomCode: current.classroomCode || "",
+        status: response.ok ? "발급 완료" : `실패: ${result.error || response.status}`,
+      });
+    }
+    await saveStateToServer();
+    downloadStudentCredentials(results);
+    renderStudents();
+    const successCount = results.filter((row) => row.status === "발급 완료").length;
+    alert(`학생 계정 일괄 발급이 끝났습니다.\n성공 ${successCount}명 · 실패 ${results.length - successCount}명\n\n다운로드된 발급명단 파일은 개인정보이므로 안전하게 보관해주세요.`);
+  } finally {
+    button.disabled = false;
+    button.textContent = "학생 아이디 일괄 발급";
   }
 }
 
