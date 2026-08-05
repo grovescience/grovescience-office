@@ -679,6 +679,7 @@ function setup() {
 }
 
 function bindEvents() {
+  $("#brandDashboardBtn").addEventListener("click", () => navigateToView("dashboard"));
   $$(".nav-item").forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view, button.textContent));
   });
