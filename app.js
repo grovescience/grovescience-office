@@ -101,6 +101,8 @@ function normalizeState(saved) {
       homeworkStatus: "확인 전",
       classroomCode: "",
       specialClassNames: [],
+      enrollmentDate: "",
+      withdrawalDate: "",
       subject: classInfo?.subject || "",
       book: classInfo?.defaultBook || "",
       ...student,
@@ -699,6 +701,7 @@ function bindEvents() {
   $("#studentSearch").addEventListener("input", renderStudents);
   $("#classFilter").addEventListener("change", renderStudents);
   $("#statusFilter").addEventListener("change", renderStudents);
+  $("#statusInput").addEventListener("change", syncStudentStatusDates);
   $("#waitAutoAdvance").addEventListener("change", syncWaitAutoAdvanceFields);
   $("#waitGrade").addEventListener("change", suggestWaitNextClass);
   $("#waitClass").addEventListener("change", suggestWaitNextClass);
@@ -1407,8 +1410,8 @@ function selectStudentSort(sort) {
 
 function sortStudentsByRegistration(students) {
   return [...students].sort((a, b) => {
-    const aCreated = Number(a.createdAt || 0);
-    const bCreated = Number(b.createdAt || 0);
+    const aCreated = a.enrollmentDate ? new Date(`${a.enrollmentDate}T00:00:00`).getTime() : Number(a.createdAt || 0);
+    const bCreated = b.enrollmentDate ? new Date(`${b.enrollmentDate}T00:00:00`).getTime() : Number(b.createdAt || 0);
     const dateDiff = selectedStudentSort === "newest" ? bCreated - aCreated : aCreated - bCreated;
     if (dateDiff) return dateDiff;
     return String(a.name || "").localeCompare(String(b.name || ""), "ko", { numeric: true });
@@ -1445,6 +1448,7 @@ function finishSelectedSpecialClass() {
       className: nextRegularClass,
       specialClassNames: nextSpecialClasses,
       status: hasOtherClass ? student.status : "퇴원",
+      withdrawalDate: hasOtherClass ? student.withdrawalDate : today(),
       retiredAt: hasOtherClass ? student.retiredAt : Date.now(),
       retiredReason: hasOtherClass ? student.retiredReason : `${className} 특강 종료`,
     };
@@ -1466,7 +1470,7 @@ function renderStudents() {
           const classInfo = getClassInfo(student.className);
           return `
             <tr>
-              <td><strong>${student.name}</strong><br><span class="badge">${student.status}</span></td>
+              <td><strong>${student.name}</strong><br><span class="badge">${student.status}</span><br><small class="muted-text">입회 ${student.enrollmentDate || "미입력"}${student.withdrawalDate ? `<br>퇴원 ${student.withdrawalDate}` : ""}</small></td>
               <td>${student.school || "-"}<br>${student.grade || "-"}</td>
               <td>${formatStudentClasses(student)}<span class="muted-text">${classInfo?.frequency || "-"}</span></td>
               <td>학생 ${student.studentPhone || "-"}<br>학부모 ${student.parentPhone || "-"}</td>
@@ -1475,7 +1479,8 @@ function renderStudents() {
               <td>
                 <div class="row-actions">
                   ${selectedStudentList === "retired" || selectedStudentList === "paused"
-                    ? `<button class="mini-button restore" type="button" onclick="restoreStudent('${student.id}')">재원생으로 복구</button>
+                    ? `<button class="mini-button" type="button" onclick="openStudentDialog('${student.id}')">수정</button>
+                       <button class="mini-button restore" type="button" onclick="restoreStudent('${student.id}')">재원생으로 복구</button>
                        ${selectedStudentList === "retired" ? `<button class="mini-button danger" type="button" onclick="permanentlyDeleteStudent('${student.id}')">영구 삭제</button>` : ""}`
                     : `<button class="mini-button" type="button" onclick="openStudentDialog('${student.id}')">수정</button>
                        <button class="mini-button" type="button" onclick="quickConsult('${student.id}')">상담</button>
@@ -3153,8 +3158,16 @@ function openStudentDialog(studentId = "") {
   $("#homeworkStatusInput").value = student?.homeworkStatus || "확인 전";
   $("#tuitionInput").value = student?.tuition || classInfo?.tuition || "";
   $("#statusInput").value = student?.status || "재원";
+  $("#enrollmentDateInput").value = student?.enrollmentDate || (student ? "" : today());
+  $("#withdrawalDateInput").value = student?.withdrawalDate || (student?.retiredAt ? dateKey(new Date(student.retiredAt)) : "");
   $("#memoInput").value = student?.memo || "";
   $("#studentDialog").showModal();
+}
+
+function syncStudentStatusDates() {
+  if ($("#statusInput").value === "퇴원" && !$("#withdrawalDateInput").value) {
+    $("#withdrawalDateInput").value = today();
+  }
 }
 
 async function saveStudentFromForm() {
@@ -3165,6 +3178,7 @@ async function saveStudentFromForm() {
   const enteredClassroomCode = $("#classroomCodeInput").value.trim().toUpperCase();
   const classroomCode = enteredClassroomCode || existing?.classroomCode || generateClassroomCode(existingCodes);
   const specialClassNames = $$("#specialClassChecks input:checked").map((input) => input.value);
+  const selectedStudentStatus = $("#statusInput").value;
   const student = {
     id,
     name: $("#nameInput").value.trim(),
@@ -3181,7 +3195,9 @@ async function saveStudentFromForm() {
     homework: $("#homeworkInput").value.trim(),
     homeworkStatus: $("#homeworkStatusInput").value,
     tuition: Number($("#tuitionInput").value || classInfo?.tuition || 0),
-    status: $("#statusInput").value,
+    status: selectedStudentStatus,
+    enrollmentDate: $("#enrollmentDateInput").value,
+    withdrawalDate: selectedStudentStatus === "퇴원" ? ($("#withdrawalDateInput").value || today()) : $("#withdrawalDateInput").value,
     memo: $("#memoInput").value.trim(),
     createdAt: existing?.createdAt || Date.now(),
   };
@@ -3220,7 +3236,7 @@ async function saveStudentFromForm() {
 function retireStudent(studentId) {
   const student = state.students.find((item) => item.id === studentId);
   if (!student || !confirm(`${student.name} 학생을 퇴원생 명단으로 옮길까요?\n\n출석·납부·상담 기록은 그대로 유지됩니다.`)) return;
-  state.students = state.students.map((item) => item.id === studentId ? { ...item, status: "퇴원", retiredAt: Date.now(), retiredReason: "개별 퇴원 처리" } : item);
+  state.students = state.students.map((item) => item.id === studentId ? { ...item, status: "퇴원", withdrawalDate: today(), retiredAt: Date.now(), retiredReason: "개별 퇴원 처리" } : item);
   saveState();
   renderAll();
 }
@@ -3228,7 +3244,7 @@ function retireStudent(studentId) {
 function restoreStudent(studentId) {
   const student = state.students.find((item) => item.id === studentId);
   if (!student || !confirm(`${student.name} 학생을 재원생 명단으로 복구할까요?`)) return;
-  state.students = state.students.map((item) => item.id === studentId ? { ...item, status: "재원", restoredAt: Date.now(), retiredReason: "" } : item);
+  state.students = state.students.map((item) => item.id === studentId ? { ...item, status: "재원", withdrawalDate: "", restoredAt: Date.now(), retiredReason: "" } : item);
   saveState();
   renderAll();
 }
