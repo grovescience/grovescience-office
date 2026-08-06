@@ -1558,7 +1558,13 @@ async function provisionAllStudentAccounts() {
   if (!accessToken) return alert("온라인 관리자 로그인이 필요합니다.");
   const button = $("#bulkStudentAccountsBtn");
   button.disabled = true;
-  const usedIds = new Set();
+  // Keep every already-issued ID reserved so a bulk run never tries to
+  // create a second Supabase user with the same synthetic email address.
+  const usedIds = new Set(
+    state.students
+      .map((student) => String(student.loginId || "").trim().toLowerCase())
+      .filter(Boolean),
+  );
   const accounts = targets.map((student, index) => ({
     student,
     loginId: makeUniqueLoginId(student, index, usedIds),
