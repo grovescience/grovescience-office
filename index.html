@@ -104,13 +104,15 @@
             <div class="schedule-editor">
               <label class="field-label">일자<input id="scheduleDateInput" type="date" /></label>
               <label class="field-label">구분<select id="scheduleTypeInput"><option>학원 행사</option><option>상담</option><option>학원 휴무</option><option>학원 방학</option><option>휴강</option><option>수업 취소</option><option>보강</option><option>기타</option></select></label>
-              <label class="field-label">시간<input id="scheduleTimeInput" type="time" /></label>
+              <label class="field-label">시작시간<input id="scheduleTimeInput" type="time" /></label>
+              <label class="field-label">종료시간<input id="scheduleEndTimeInput" type="time" /></label>
               <label class="field-label">일정명<input id="scheduleTitleInput" placeholder="예: 여름방학 휴원" /></label>
               <label class="field-label wide">메모<input id="scheduleMemoInput" placeholder="선택 사항" /></label>
               <div class="schedule-move-fields" id="scheduleMoveFields" hidden>
                 <strong>보강 이동 일정</strong>
                 <label class="field-label">보강일<input id="scheduleMoveDateInput" type="date" /></label>
-                <label class="field-label">보강시간<input id="scheduleMoveTimeInput" type="time" /></label>
+                <label class="field-label">보강 시작<input id="scheduleMoveTimeInput" type="time" /></label>
+                <label class="field-label">보강 종료<input id="scheduleMoveEndTimeInput" type="time" /></label>
                 <span>입력하면 달력에 ‘기존 수업 → 보강 수업’으로 연결됩니다.</span>
               </div>
               <button class="primary-button" id="addScheduleBtn" type="button">일정 추가</button>

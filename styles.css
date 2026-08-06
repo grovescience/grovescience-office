@@ -1620,15 +1620,15 @@ dialog::backdrop {
 .calendar-closed { background: #fff0ef; color: #a33c32; font-weight: 800; }
 .calendar-makeup { background: #eef2ff; color: #4056a1; font-weight: 800; }
 .calendar-more { color: var(--muted); font-weight: 800; }
-.schedule-editor { display: grid; grid-template-columns: 150px 140px 120px minmax(180px, 1fr) minmax(180px, 1fr) auto; gap: 10px; align-items: end; margin-top: 18px; }
+.schedule-editor { display: grid; grid-template-columns: 140px 135px 110px 110px minmax(170px, 1fr) minmax(170px, 1fr) auto; gap: 10px; align-items: end; margin-top: 18px; }
 .schedule-editor .wide { grid-column: auto; }
-.schedule-move-fields { grid-column: 1 / -1; display: grid; grid-template-columns: auto 180px 150px 1fr; gap: 10px; align-items: end; padding: 12px; border: 1px solid #d7def5; border-radius: 9px; background: #f7f8ff; }
+.schedule-move-fields { grid-column: 1 / -1; display: grid; grid-template-columns: auto 170px 140px 140px 1fr; gap: 10px; align-items: end; padding: 12px; border: 1px solid #d7def5; border-radius: 9px; background: #f7f8ff; }
 .schedule-move-fields[hidden] { display: none; }
 .schedule-move-fields > strong { align-self: center; color: #4056a1; }
 .schedule-move-fields > span { align-self: center; color: var(--muted); font-size: 13px; }
 .schedule-agenda { margin-top: 16px; display: grid; gap: 8px; }
 .schedule-agenda h3 { margin: 0 0 4px; }
-.schedule-agenda article { display: grid; grid-template-columns: auto 80px minmax(160px, 1fr) minmax(120px, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; }
+.schedule-agenda article { display: grid; grid-template-columns: auto 115px minmax(160px, 1fr) minmax(120px, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; }
 .schedule-agenda time { font-weight: 800; color: var(--green); }
 .schedule-agenda-makeup { background: #f7f8ff; border-color: #d7def5 !important; }
 
