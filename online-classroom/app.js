@@ -333,7 +333,7 @@ function renderPost(post) {
         <small>${post.lessonDate ? `수업일 ${formatLessonDate(post.lessonDate)} · ` : ""}${formatDateTime(post.createdAt)}</small>
       </div>
       <strong>${post.title}</strong>
-      <p>${post.content || ""}</p>
+      <p>${escapeHtml(post.content || "")}</p>
       ${imageList}
       ${linkList}
     </article>

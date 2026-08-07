@@ -1479,6 +1479,11 @@ td {
   line-height: 1.5;
 }
 
+.classroom-post-card p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .classroom-card span,
 .classroom-card em {
   display: block;

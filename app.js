@@ -3155,6 +3155,7 @@ function clearClassroomPostForm() {
   $("#classroomPostLessonDateInput").value = today();
   renderYoutubeLinkRows([]);
   resetClassroomImageEditor();
+  $("#saveClassroomPostBtn").textContent = "게시글 저장";
 }
 
 function resetClassroomImageEditor(images = []) {
@@ -3409,6 +3410,9 @@ function editClassroomPost(roomId, postId) {
   $("#classroomPostLessonDateInput").value = post.lessonDate || today();
   renderYoutubeLinkRows(normalizeYoutubeLinks(post.links, post.link));
   resetClassroomImageEditor(post.images);
+  $("#saveClassroomPostBtn").textContent = "수정 내용 저장";
+  $("#postContentInput").scrollIntoView({ behavior: "smooth", block: "center" });
+  $("#postTitleInput").focus({ preventScroll: true });
 }
 
 async function deleteClassroomPost(roomId, postId) {
@@ -3464,13 +3468,13 @@ function renderClassroomPostCard(roomId, post, editable = false) {
         <small>${post.openToAll ? "전체 공개 · " : ""}${post.lessonDate ? `수업일 ${formatLessonDate(post.lessonDate)} · ` : ""}${formatDateTime(post.createdAt)}</small>
       </div>
       <strong>${post.title}</strong>
-      <p>${post.content || "내용 없음"}</p>
+      <p>${scoreEscape(post.content || "내용 없음")}</p>
       ${imageList}
       ${linkList}
       ${
         editable
           ? `<div class="row-actions">
-              <button class="mini-button" type="button" onclick="editClassroomPost('${roomId}', '${post.id}')">수정</button>
+              <button class="mini-button" type="button" onclick="editClassroomPost('${roomId}', '${post.id}')">게시글 수정</button>
               <button class="mini-button danger" type="button" onclick="deleteClassroomPost('${roomId}', '${post.id}')">삭제</button>
             </div>`
           : ""

@@ -290,6 +290,11 @@ a:focus-visible {
   background: #fbfcf8;
 }
 
+.post-card p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .post-head {
   display: flex;
   justify-content: space-between;
