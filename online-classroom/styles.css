@@ -41,10 +41,58 @@ select {
 .login-panel,
 .room-header,
 .room-list,
-.post-panel {
+.post-panel,
+.score-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
+}
+
+.score-panel {
+  margin: 16px 0;
+  padding: 16px;
+}
+
+.score-panel .section-title p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+#studentScoreList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 10px;
+}
+
+.student-score-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcf8;
+}
+
+.student-score-card > div {
+  display: grid;
+  gap: 4px;
+}
+
+.student-score-card small,
+.student-score-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.student-score-card em {
+  flex: 0 0 auto;
+  color: var(--green);
+  font-size: 24px;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .login-panel {

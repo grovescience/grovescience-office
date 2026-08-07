@@ -7,6 +7,31 @@ function isRoomOpenForStudent(room, studentId, now = new Date()) {
   return (!access.startDate || access.startDate <= today) && (!access.endDate || access.endDate >= today);
 }
 
+function buildStudentScores(state, studentId) {
+  return (state.scoreExams || [])
+    .map((exam) => {
+      const result = (exam.results || []).find((item) => item.studentId === studentId);
+      if (!result) return null;
+      const totalQuestions = exam.type === "academy" ? Number(exam.totalQuestions) || 0 : null;
+      const score = exam.type === "academy"
+        ? (totalQuestions ? Math.round((Number(result.correctCount) / totalQuestions) * 1000) / 10 : 0)
+        : Math.max(0, Math.min(100, Number(result.score) || 0));
+      return {
+        id: exam.id,
+        type: exam.type,
+        title: exam.title || "시험",
+        date: exam.date || "",
+        subject: exam.subject || "과학",
+        className: exam.className || "",
+        score,
+        correctCount: exam.type === "academy" ? Number(result.correctCount) || 0 : null,
+        totalQuestions,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+}
+
 function buildPortalPayload(state, student) {
   const classrooms = (state.classrooms || [])
     .filter((room) => isRoomOpenForStudent(room, student.id))
@@ -21,6 +46,7 @@ function buildPortalPayload(state, student) {
   return {
     student: { id: student.id, name: student.name, grade: student.grade, className: student.className },
     classrooms,
+    scores: buildStudentScores(state, student.id),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -54,6 +80,7 @@ export default async function handler(request, response) {
       if (!result.ok) return response.status(502).json({ error: "온라인 자료를 읽지 못했습니다." });
       const rows = await result.json();
       if (!rows.length) return response.status(404).json({ error: "아직 저장된 온라인 자료가 없습니다." });
+      await syncStudentPortals(rows[0].payload).catch(() => {});
       return response.status(200).json(rows[0].payload);
     }
     if (request.method === "POST") {

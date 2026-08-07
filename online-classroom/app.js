@@ -238,7 +238,33 @@ function renderStudentRoom() {
       renderStudentRoom();
     });
   });
+  renderStudentScores();
   renderPosts();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '\"': "&quot;" }[char]));
+}
+
+function renderStudentScores() {
+  const scores = Array.isArray(currentStudentData?.scores) ? currentStudentData.scores : [];
+  $("#scoreCountLabel").textContent = `${scores.length}개`;
+  $("#studentScoreList").innerHTML = scores.length
+    ? scores.map((item) => {
+        const academyDetail = item.type === "academy"
+          ? `<span>${Number(item.correctCount) || 0}/${Number(item.totalQuestions) || 0}개 정답 · 100점 환산</span>`
+          : `<span>학교 시험</span>`;
+        return `
+          <article class="student-score-card">
+            <div>
+              <small>${escapeHtml(item.date)} · ${escapeHtml(item.subject || "과학")}${item.className ? ` · ${escapeHtml(item.className)}` : ""}</small>
+              <strong>${escapeHtml(item.title || "시험")}</strong>
+              ${academyDetail}
+            </div>
+            <em>${Number(item.score) || 0}점</em>
+          </article>`;
+      }).join("")
+    : `<div class="empty">아직 등록된 성적이 없습니다.</div>`;
 }
 
 function renderPosts() {

@@ -3674,6 +3674,27 @@ function buildOnlineStudentFiles(sourceState = state) {
             updatedAt: post.updatedAt || post.createdAt,
           })),
       })),
+      scores: (sourceState.scoreExams || [])
+        .map((exam) => {
+          const result = (exam.results || []).find((item) => item.studentId === student.id);
+          if (!result) return null;
+          const totalQuestions = exam.type === "academy" ? Number(exam.totalQuestions) || 0 : null;
+          return {
+            id: exam.id,
+            type: exam.type,
+            title: exam.title || "시험",
+            date: exam.date || "",
+            subject: exam.subject || "과학",
+            className: exam.className || "",
+            score: exam.type === "academy"
+              ? (totalQuestions ? Math.round((Number(result.correctCount) / totalQuestions) * 1000) / 10 : 0)
+              : Math.max(0, Math.min(100, Number(result.score) || 0)),
+            correctCount: exam.type === "academy" ? Number(result.correctCount) || 0 : null,
+            totalQuestions,
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => String(b.date).localeCompare(String(a.date))),
       exportedAt: new Date().toISOString(),
     };
     return files;
