@@ -208,6 +208,10 @@ function getAllowedRooms() {
   return sortRooms(currentStudentData?.classrooms || []);
 }
 
+function displayOrchardOnText(value) {
+  return String(value || "").replace(/수업방/g, "과수원ON");
+}
+
 function renderStudentRoom() {
   const student = currentStudentData?.student;
   if (!student) {
@@ -225,13 +229,13 @@ function renderStudentRoom() {
         .map(
           (room) => `
             <button class="room-button ${room.id === currentRoomId ? "active" : ""}" type="button" data-room-id="${room.id}">
-              <strong>${room.name}</strong><br />
+              <strong>${escapeHtml(displayOrchardOnText(room.name))}</strong><br />
               <span>${(room.posts || []).length}개 게시글</span>
             </button>
           `,
         )
         .join("")
-    : `<div class="empty">아직 입장 가능한 수업방이 없습니다.</div>`;
+    : `<div class="empty">아직 입장 가능한 과수원ON이 없습니다.</div>`;
   document.querySelectorAll("[data-room-id]").forEach((button) => {
     button.addEventListener("click", () => {
       currentRoomId = button.dataset.roomId;
@@ -269,7 +273,7 @@ function renderStudentScores() {
 
 function renderPosts() {
   const room = getAllowedRooms().find((item) => item.id === currentRoomId);
-  $("#roomTitle").textContent = room ? room.name : "게시글";
+  $("#roomTitle").textContent = room ? displayOrchardOnText(room.name) : "게시글";
   $("#postList").innerHTML = room?.posts?.length
     ? [...room.posts].sort((a, b) => b.createdAt - a.createdAt).map(renderPost).join("")
     : `<div class="empty">확인할 게시글이 없습니다.</div>`;

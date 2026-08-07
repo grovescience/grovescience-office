@@ -1573,8 +1573,45 @@ td {
 }
 
 .classroom-card {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
+}
+
+.classroom-card-main {
+  min-width: 0;
+}
+
+.classroom-card .link-name-button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classroom-card .classroom-card-description,
+.classroom-card .classroom-member-names {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classroom-card .classroom-card-description {
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line);
+}
+
+.classroom-card .classroom-member-names {
+  margin-top: 9px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: #f2f5ee;
+  color: var(--ink);
+}
+
+.classroom-card > .row-actions {
+  justify-content: flex-end;
+  padding-top: 2px;
 }
 
 .classroom-card.selected {

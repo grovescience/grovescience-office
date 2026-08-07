@@ -172,7 +172,7 @@ function normalizeClassrooms(classrooms = []) {
     const memberStudentIds = Array.isArray(room.memberStudentIds) ? [...new Set(room.memberStudentIds)] : [];
     const normalizedRoom = {
       id: room.id || crypto.randomUUID(),
-      name: room.name || "새 수업방",
+      name: room.name || "새 과수원ON",
       teacher: room.teacher || "",
       description: room.description || "",
       isPublic: getClassroomPublicFlag(room),
@@ -1433,7 +1433,7 @@ function openClassroomStudentList(roomId) {
   if (!room) return;
   const ids = new Set(room.memberStudentIds || []);
   const students = sortStudentsByGradeName(state.students.filter((student) => ids.has(student.id)));
-  openMemberDialog(`${room.name} 수업방 학생 명단`, students, room.id);
+  openMemberDialog(`${classroomDisplayText(room.name)} 학생 명단`, students, room.id);
 }
 
 function openMemberDialog(title, students, roomId = "") {
@@ -1443,7 +1443,7 @@ function openMemberDialog(title, students, roomId = "") {
   $("#memberDialogTitle").textContent = title;
   $("#memberDialogCount").textContent = `${students.length}명`;
   $("#memberDialogHint").textContent = roomId
-    ? "이 수업방에 연결된 학생을 확인하고 바로 추가하거나 제외할 수 있습니다."
+    ? "이 과수원ON에 연결된 학생을 확인하고 바로 추가하거나 제외할 수 있습니다."
     : "연결된 학생과 로그인 아이디를 확인할 수 있습니다.";
   $("#memberDialogAddTools").hidden = !roomId;
   renderMemberDialogStudentOptions();
@@ -1494,7 +1494,7 @@ function addStudentFromMemberDialog() {
 
 function removeStudentFromMemberDialog(studentId) {
   const student = state.students.find((item) => item.id === studentId);
-  if (!memberDialogRoomId || !student || !confirm(`${student.name} 학생을 이 수업방에서 제외할까요?\n학생정보 자체는 삭제되지 않습니다.`)) return;
+  if (!memberDialogRoomId || !student || !confirm(`${student.name} 학생을 이 과수원ON에서 제외할까요?\n학생정보 자체는 삭제되지 않습니다.`)) return;
   state.classrooms = state.classrooms.map((room) => {
     if (room.id !== memberDialogRoomId) return room;
     const memberAccess = { ...(room.memberAccess || {}) };
@@ -1689,7 +1689,7 @@ function csvValue(value) {
 }
 
 function downloadStudentCredentials(rows, fileLabel = "발급명단") {
-  const headers = ["학생 이름", "학년", "수강반", "로그인 아이디", "임시 비밀번호", "수업방 코드", "학생용 주소", "발급 결과"];
+  const headers = ["학생 이름", "학년", "수강반", "로그인 아이디", "임시 비밀번호", "과수원ON 코드", "학생용 주소", "발급 결과"];
   const sortedRows = [...rows].sort((left, right) =>
     String(left.loginId || "").localeCompare(String(right.loginId || ""), "en", { sensitivity: "base" }),
   );
@@ -2949,7 +2949,7 @@ function renderClassroomMemberChecks(selectedIds, selectedAccess = classroomMemb
           },
         )
         .join("")
-    : `<div class="empty-state">${state.students.length ? "선택한 학년에 학생이 없습니다." : "학생명단에 학생이 있어야 수업방 권한을 연결할 수 있습니다."}</div>`;
+    : `<div class="empty-state">${state.students.length ? "선택한 학년에 학생이 없습니다." : "학생명단에 학생이 있어야 과수원ON 권한을 연결할 수 있습니다."}</div>`;
   updateClassroomMemberCount();
   updateVisibleGradeAllCheck();
 }
@@ -3046,7 +3046,7 @@ function clearClassroomForm() {
   $("#classroomTeacherInput").value = "";
   $("#classroomDescriptionInput").value = "";
   $("#classroomPublicInput").checked = false;
-  $("#classroomFormMode").textContent = "새 수업방";
+  $("#classroomFormMode").textContent = "새 과수원ON";
   classroomMemberSelection = new Set();
   classroomMemberAccess = {};
   renderClassroomMemberChecks([]);
@@ -3078,7 +3078,7 @@ function saveClassroomFromForm() {
     updatedAt: Date.now(),
   };
   if (!room.name) {
-    alert("수업방 이름을 입력해주세요.");
+    alert("과수원ON 이름을 입력해주세요.");
     return;
   }
   state.classrooms = existing ? state.classrooms.map((item) => (item.id === id ? room : item)) : [...state.classrooms, room];
@@ -3098,14 +3098,14 @@ function editClassroom(roomId) {
   $("#classroomTeacherInput").value = room.teacher || "";
   $("#classroomDescriptionInput").value = room.description || "";
   $("#classroomPublicInput").checked = isClassroomPublic(room);
-  $("#classroomFormMode").textContent = "수업방 수정";
+  $("#classroomFormMode").textContent = "과수원ON 수정";
   renderClassroomMemberChecks(room.memberStudentIds || [], room.memberAccess || {});
   $("#classroomEditorPanel")?.showModal();
 }
 
 function deleteClassroom(roomId) {
   const room = state.classrooms.find((item) => item.id === roomId);
-  if (!room || !confirm(`${room.name} 수업방을 삭제할까요? 게시글도 함께 삭제됩니다.`)) return;
+  if (!room || !confirm(`${classroomDisplayText(room.name)}을(를) 삭제할까요? 게시글도 함께 삭제됩니다.`)) return;
   state.classrooms = state.classrooms.filter((item) => item.id !== roomId);
   if (currentStudentRoomId === roomId) currentStudentRoomId = "";
   if (currentAdminClassroomRoomId === roomId) currentAdminClassroomRoomId = "";
@@ -3142,6 +3142,10 @@ function showRecentClassroomPosts() {
   renderAdminClassroomPosts();
 }
 
+function classroomDisplayText(value) {
+  return String(value || "").replace(/수업방/g, "과수원ON");
+}
+
 function renderClassroomList() {
   $("#classroomCountLabel").textContent = `${state.classrooms.length}개`;
   $("#classroomList").innerHTML = state.classrooms.length
@@ -3151,27 +3155,29 @@ function renderClassroomList() {
             .map((studentId) => state.students.find((student) => student.id === studentId)?.name)
             .filter(Boolean)
             .join(", ");
+          const displayName = classroomDisplayText(room.name);
+          const displayDescription = classroomDisplayText(room.description || "설명 없음");
           return `
             <article class="classroom-card ${currentAdminClassroomRoomId === room.id ? "selected" : ""}" data-room-id="${room.id}">
-              <div>
-                <button class="link-name-button" type="button" onclick="openClassroomPosts('${room.id}')">${room.name}</button>
-                <p>${room.description || "설명 없음"}</p>
+              <div class="classroom-card-main">
+                <button class="link-name-button" type="button" onclick="openClassroomPosts('${room.id}')">${scoreEscape(displayName)}</button>
+                <p class="classroom-card-description" title="${scoreEscape(displayDescription)}">${scoreEscape(displayDescription)}</p>
                 <div class="classroom-meta-row">
-                  <span class="visibility-pill ${isClassroomPublic(room) ? "public" : ""}">${isClassroomPublic(room) ? "학생용 공개" : "비공개"}</span>
+                  <span class="visibility-pill ${isClassroomPublic(room) ? "public" : ""}">${isClassroomPublic(room) ? "과수원ON 공개" : "비공개"}</span>
                   <span>${room.teacher ? `담당 ${room.teacher} · ` : ""}${room.memberStudentIds.length}명 접근 · 게시글 ${room.posts.length}개</span>
                 </div>
-                <em>${memberNames || "연결된 학생 없음"}</em>
+                <em class="classroom-member-names" title="${scoreEscape(memberNames || "연결된 학생 없음")}">학생 · ${scoreEscape(memberNames || "연결된 학생 없음")}</em>
               </div>
               <div class="row-actions">
                 <button class="mini-button" type="button" onclick="openClassroomStudentList('${room.id}')">학생 명단</button>
-                <button class="mini-button" type="button" onclick="editClassroom('${room.id}')">수업방 수정</button>
+                <button class="mini-button" type="button" onclick="editClassroom('${room.id}')">과수원ON 수정</button>
                 <button class="mini-button danger" type="button" onclick="deleteClassroom('${room.id}')">삭제</button>
               </div>
             </article>
           `;
         })
         .join("")
-    : `<div class="empty-state">아직 수업방이 없습니다. 왼쪽에서 수업방을 만들어주세요.</div>`;
+    : `<div class="empty-state">아직 과수원ON이 없습니다. 위의 만들기 버튼을 눌러주세요.</div>`;
 }
 
 function renderPostClassroomOptions() {
@@ -3179,9 +3185,9 @@ function renderPostClassroomOptions() {
   const preferredRoomId = currentAdminClassroomRoomId || selectedRoomId;
   $("#postClassroomSelect").innerHTML = state.classrooms.length
     ? sortClassroomsByName(state.classrooms)
-        .map((room) => `<option value="${room.id}">${room.name}${isClassroomPublic(room) ? "" : " (비공개)"}</option>`)
+        .map((room) => `<option value="${room.id}">${scoreEscape(classroomDisplayText(room.name))}${isClassroomPublic(room) ? "" : " (비공개)"}</option>`)
         .join("")
-    : `<option value="">수업방 없음</option>`;
+    : `<option value="">과수원ON 없음</option>`;
   if (preferredRoomId && state.classrooms.some((room) => room.id === preferredRoomId)) {
     $("#postClassroomSelect").value = preferredRoomId;
   }
@@ -3368,7 +3374,7 @@ async function saveClassroomPostFromForm() {
   const roomId = $("#postClassroomSelect").value;
   const room = state.classrooms.find((item) => item.id === roomId);
   if (!room) {
-    alert("게시글을 올릴 수업방을 먼저 만들어주세요.");
+    alert("게시글을 올릴 과수원ON을 먼저 만들어주세요.");
     return;
   }
   const postId = $("#classroomPostIdInput").value || crypto.randomUUID();
@@ -3479,10 +3485,10 @@ function renderAdminClassroomPosts() {
   const entries = selectedRoom
     ? allPosts.filter((entry) => entry.room.id === selectedRoom.id)
     : (showAllRecentClassroomPosts ? allPosts : allPosts.slice(0, 5));
-  $("#adminClassroomPostsTitle").textContent = selectedRoom ? `${selectedRoom.name} 게시글` : "최근 업로드";
+  $("#adminClassroomPostsTitle").textContent = selectedRoom ? `${classroomDisplayText(selectedRoom.name)} 게시글` : "최근 업로드";
   $("#adminClassroomPostsHint").textContent = selectedRoom
     ? `지금까지 올린 게시글 ${entries.length}개입니다. 제목을 누르면 내용이 펼쳐집니다.`
-    : `모든 수업방의 게시글 ${allPosts.length}개 중 ${entries.length}개를 최신순으로 표시합니다.`;
+    : `모든 과수원ON의 게시글 ${allPosts.length}개 중 ${entries.length}개를 최신순으로 표시합니다.`;
   $("#showRecentClassroomPostsBtn").hidden = !selectedRoom;
   $("#showAllClassroomPostsBtn").hidden = Boolean(selectedRoom) || allPosts.length <= 5;
   $("#showAllClassroomPostsBtn").textContent = showAllRecentClassroomPosts ? "5개만 보기" : "전체 펼치기";
@@ -3490,14 +3496,14 @@ function renderAdminClassroomPosts() {
     ? entries.map(({ room, post }) => `
         <details class="classroom-post-summary">
           <summary>
-            <span class="classroom-post-room">${scoreEscape(room.name)}</span>
+            <span class="classroom-post-room">${scoreEscape(classroomDisplayText(room.name))}</span>
             <strong>${scoreEscape(post.title || "제목 없음")}</strong>
             <time>${scoreEscape(post.lessonDate ? formatLessonDate(post.lessonDate) : formatDateTime(post.createdAt))}</time>
           </summary>
           <div class="classroom-post-summary-content">${renderClassroomPostCard(room.id, post, true)}</div>
         </details>
       `).join("")
-    : `<div class="empty-state">${selectedRoom ? "이 수업방에는 아직 게시글이 없습니다." : "아직 업로드한 게시글이 없습니다."}</div>`;
+    : `<div class="empty-state">${selectedRoom ? "이 과수원ON에는 아직 게시글이 없습니다." : "아직 업로드한 게시글이 없습니다."}</div>`;
   hydrateClassroomImages($("#adminClassroomPosts"), "./api/classroom-images");
 }
 
@@ -3570,7 +3576,7 @@ function loginStudentRoom() {
     $("#studentRoomArea").hidden = true;
     $("#studentRoomLogin").hidden = false;
     $("#studentRoomLoginMessage").hidden = false;
-    $("#studentRoomLoginMessage").innerHTML = `<strong>${student.name} 학생은 연결된 수업방이 없습니다.</strong><span>수업방 관리 → 해당 수업방 → 학생 명단에서 학생을 추가해주세요.</span>`;
+    $("#studentRoomLoginMessage").innerHTML = `<strong>${student.name} 학생은 연결된 과수원ON이 없습니다.</strong><span>과수원ON 관리 → 해당 과수원ON → 학생 명단에서 학생을 추가해주세요.</span>`;
     return;
   }
   $("#studentRoomLoginMessage").hidden = true;
@@ -3607,13 +3613,13 @@ function renderStudentClassroomView() {
         .map(
           (room) => `
             <button class="${room.id === currentStudentRoomId ? "active" : ""}" type="button" onclick="openStudentClassroom('${room.id}')">
-              <strong>${room.name}</strong>
+              <strong>${scoreEscape(classroomDisplayText(room.name))}</strong>
               <span>${getClassroomPreviewStatus(room, student.id)} · ${(room.posts || []).length}개 게시글</span>
             </button>
           `,
         )
         .join("")
-    : `<div class="empty-state">이 학생에게 연결된 수업방이 없습니다. 수업방 관리에서 학생을 연결해주세요.</div>`;
+    : `<div class="empty-state">이 학생에게 연결된 과수원ON이 없습니다. 과수원ON 관리에서 학생을 연결해주세요.</div>`;
   renderStudentClassroomPosts();
 }
 
@@ -3636,7 +3642,7 @@ function getAllowedClassrooms(studentId) {
 
 function openStudentClassroom(roomId) {
   if (!currentStudentRoomStudentId || !getAdminPreviewClassrooms(currentStudentRoomStudentId).some((room) => room.id === roomId)) {
-    alert("이 학생에게 연결되지 않은 수업방입니다.");
+    alert("이 학생에게 연결되지 않은 과수원ON입니다.");
     return;
   }
   currentStudentRoomId = roomId;
@@ -3646,7 +3652,7 @@ function openStudentClassroom(roomId) {
 function renderStudentClassroomPosts() {
   const room = getAdminPreviewClassrooms(currentStudentRoomStudentId).find((item) => item.id === currentStudentRoomId);
   const posts = [...(room?.posts || [])];
-  $("#studentClassroomTitle").textContent = room ? room.name : "게시글";
+  $("#studentClassroomTitle").textContent = room ? classroomDisplayText(room.name) : "게시글";
   $("#studentPostList").innerHTML = posts.length
     ? posts.sort((a, b) => b.createdAt - a.createdAt).map((post) => renderClassroomPostCard(room.id, post, false)).join("")
     : `<div class="empty-state">확인할 게시글이 없습니다.</div>`;
@@ -3678,12 +3684,12 @@ function renderClassRoomPreview() {
         const linkedCount = (room.memberStudentIds || []).filter((studentId) => studentIds.has(studentId)).length;
         return `
           <button class="${room.id === currentClassPreviewRoomId ? "active" : ""}" type="button" onclick="openClassRoomPreview('${room.id}')">
-            <strong>${room.name}</strong>
+            <strong>${scoreEscape(classroomDisplayText(room.name))}</strong>
             <span>${isClassroomPublic(room) ? "학생용 공개" : "비공개"} · ${linkedCount}/${students.length}명 연결 · ${(room.posts || []).length}개 게시글</span>
           </button>
         `;
       }).join("")
-    : `<div class="empty-state">이 반 학생에게 연결된 수업방이 없습니다.</div>`;
+    : `<div class="empty-state">이 반 학생에게 연결된 과수원ON이 없습니다.</div>`;
   renderClassRoomPreviewPosts();
 }
 
@@ -3698,7 +3704,7 @@ function renderClassRoomPreviewPosts() {
   const { rooms } = getClassRoomPreviewData();
   const room = rooms.find((item) => item.id === currentClassPreviewRoomId);
   const posts = [...(room?.posts || [])].sort((left, right) => right.createdAt - left.createdAt);
-  $("#classRoomPreviewPostTitle").textContent = room ? room.name : "게시글";
+  $("#classRoomPreviewPostTitle").textContent = room ? classroomDisplayText(room.name) : "게시글";
   $("#classRoomPreviewPosts").innerHTML = posts.length
     ? posts.map((post) => renderClassroomPostCard(room.id, post, false)).join("")
     : `<div class="empty-state">확인할 게시글이 없습니다.</div>`;
@@ -3728,9 +3734,9 @@ function buildOnlineStudentFiles(sourceState = state) {
       },
       classrooms: sortClassroomsByName(classrooms.filter((room) => canStudentAccessClassroom(room, student.id))).map((room) => ({
         id: room.id,
-        name: room.name,
+        name: classroomDisplayText(room.name),
         teacher: room.teacher || "",
-        description: room.description || "",
+        description: classroomDisplayText(room.description || ""),
         isPublic: true,
         posts: getVisibleClassroomPosts(room, student.id)
           .sort((a, b) => b.createdAt - a.createdAt)
@@ -3957,7 +3963,7 @@ async function saveStudentFromForm() {
 
 function retireStudent(studentId) {
   const student = state.students.find((item) => item.id === studentId);
-  if (!student || !confirm(`${student.name} 학생을 퇴원생 명단으로 옮길까요?\n\n정규반 수업방에서는 즉시 제외되고, 특강반 수업방 이용권한은 유지됩니다.\n출석·납부·상담 기록도 그대로 유지됩니다.`)) return;
+  if (!student || !confirm(`${student.name} 학생을 퇴원생 명단으로 옮길까요?\n\n정규반 과수원ON에서는 즉시 제외되고, 특강반 과수원ON 이용권한은 유지됩니다.\n출석·납부·상담 기록도 그대로 유지됩니다.`)) return;
   const retiredStudent = { ...student, status: "퇴원", withdrawalDate: today(), retiredAt: Date.now(), retiredReason: "개별 퇴원 처리" };
   state.students = state.students.map((item) => item.id === studentId ? retiredStudent : item);
   removeStudentFromRegularClassrooms(retiredStudent);
@@ -3976,7 +3982,7 @@ function restoreStudent(studentId) {
 function permanentlyDeleteStudent(studentId) {
   const student = state.students.find((item) => item.id === studentId && item.status === "퇴원");
   if (!student) return;
-  if (!confirm(`${student.name} 학생을 영구 삭제할까요?\n\n학생 정보와 연결된 출석·납부·상담·수업방 권한도 함께 삭제됩니다. 이 작업은 화면에서 되돌릴 수 없습니다.`)) return;
+  if (!confirm(`${student.name} 학생을 영구 삭제할까요?\n\n학생 정보와 연결된 출석·납부·상담·과수원ON 권한도 함께 삭제됩니다. 이 작업은 화면에서 되돌릴 수 없습니다.`)) return;
   if (!confirm(`마지막 확인입니다.\n\n${student.name} 학생을 정말 영구 삭제하시겠습니까?\n삭제 직전에 전체 백업파일을 자동으로 내려받습니다.`)) return;
 
   exportData();

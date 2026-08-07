@@ -62,7 +62,7 @@
           <details class="nav-group" open>
             <summary>과수원ON</summary>
             <div class="nav-submenu">
-              <button class="nav-item" data-view="classroomAdmin">수업방 관리</button>
+              <button class="nav-item" data-view="classroomAdmin">과수원ON 관리</button>
               <button class="nav-item" data-view="classroomStudent">미리보기</button>
             </div>
           </details>
@@ -394,30 +394,30 @@
 
         <section class="view" id="classroomAdmin">
           <div class="notice">
-            <strong>학생명단과 분리된 수업방입니다</strong>
-            <span>수업방 접근 권한은 학생정보를 수정하지 않고, 이 화면의 체크 목록으로만 연결됩니다.</span>
+            <strong>학생명단과 분리된 과수원ON입니다</strong>
+            <span>과수원ON 접근 권한은 학생정보를 수정하지 않고, 이 화면의 체크 목록으로만 연결됩니다.</span>
           </div>
 
           <div class="classroom-admin-toolbar">
             <div>
-              <h2>수업방 관리</h2>
+              <h2>과수원ON 관리</h2>
               <span>왼쪽에서 반을 선택하면 오른쪽에서 지금까지 올린 게시글을 바로 확인할 수 있습니다.</span>
             </div>
-            <button class="primary-button" id="openClassroomCreateDialogBtn" type="button">+ 수업방 만들기</button>
+            <button class="primary-button" id="openClassroomCreateDialogBtn" type="button">+ 과수원ON 만들기</button>
           </div>
 
           <div class="section-split classroom-admin-grid">
             <dialog class="classroom-editor-dialog" id="classroomEditorPanel">
               <div class="classroom-dialog-card">
               <div class="panel-heading">
-                <h2>수업방 만들기/수정</h2>
-                <span id="classroomFormMode">새 수업방</span>
+                <h2>과수원ON 만들기/수정</h2>
+                <span id="classroomFormMode">새 과수원ON</span>
               </div>
               <div class="inline-form classroom-form">
                 <input id="classroomIdInput" type="hidden" />
                 <label class="field-label">
-                  수업방 이름
-                  <input id="classroomNameInput" placeholder="예: 초6 과학독해 수업방" />
+                  과수원ON 이름
+                  <input id="classroomNameInput" placeholder="예: 초6 과학독해" />
                 </label>
                 <label class="field-label">
                   담당 선생님
@@ -425,7 +425,7 @@
                 </label>
                 <label class="field-label wide">
                   설명
-                  <textarea id="classroomDescriptionInput" rows="3" placeholder="학생에게 보이는 수업방 설명"></textarea>
+                  <textarea id="classroomDescriptionInput" rows="3" placeholder="학생에게 보이는 과수원ON 설명"></textarea>
                 </label>
                 <label class="field-label check-field">
                   공개 설정
@@ -440,7 +440,7 @@
                     <span id="classroomMemberCount">0명 선택</span>
                   </div>
                   <div class="member-tools">
-                    <select id="classroomGradeSelect" aria-label="수업방 학생 학년 선택"></select>
+                    <select id="classroomGradeSelect" aria-label="과수원ON 학생 학년 선택"></select>
                     <label class="member-all-check">
                       <input id="classroomVisibleGradeAll" type="checkbox" />
                       <span>현재 학년 전체 체크</span>
@@ -449,7 +449,7 @@
                   </div>
                   <div class="member-checks" id="classroomMemberList"></div>
                 </div>
-                <button class="primary-button" id="saveClassroomBtn" type="button">수업방 저장</button>
+                <button class="primary-button" id="saveClassroomBtn" type="button">과수원ON 저장</button>
                 <button class="ghost-button" id="clearClassroomBtn" type="button">취소</button>
               </div>
               </div>
@@ -457,7 +457,7 @@
 
             <section class="panel classroom-list-panel">
               <div class="panel-heading">
-                <h2>수업방 목록</h2>
+                <h2>과수원ON 목록</h2>
                 <span id="classroomCountLabel">0개</span>
               </div>
               <div class="classroom-list" id="classroomList"></div>
@@ -467,7 +467,7 @@
               <div class="panel-heading classroom-post-overview-heading">
                 <div>
                   <h2 id="adminClassroomPostsTitle">최근 업로드</h2>
-                  <span id="adminClassroomPostsHint">모든 수업방에서 최근에 올린 게시글 5개입니다.</span>
+                  <span id="adminClassroomPostsHint">모든 과수원ON에서 최근에 올린 게시글 5개입니다.</span>
                 </div>
                 <div class="row-actions">
                   <button class="mini-button" id="showAllClassroomPostsBtn" type="button">전체 펼치기</button>
@@ -486,7 +486,7 @@
             <div class="inline-form classroom-post-form">
               <input id="classroomPostIdInput" type="hidden" />
               <label class="field-label">
-                수업방
+                과수원ON
                 <select id="postClassroomSelect"></select>
               </label>
               <label class="field-label">
@@ -545,14 +545,14 @@
         <section class="view" id="classroomStudent">
           <div class="notice">
             <strong>과수원ON 관리자 미리보기입니다</strong>
-            <span>원장님은 비공개·이용 전·기간 종료 수업방도 확인할 수 있습니다. 실제 과수원ON에서는 설정한 공개 범위와 이용기간이 적용됩니다.</span>
+            <span>원장님은 비공개·이용 전·기간 종료 과수원ON도 확인할 수 있습니다. 실제 과수원ON에서는 설정한 공개 범위와 이용기간이 적용됩니다.</span>
           </div>
 
           <section class="panel class-room-preview-panel">
             <div class="panel-heading">
               <div>
                 <h2>반별 미리보기</h2>
-                <span>반 학생들에게 연결된 과수원ON 수업방을 한 번에 확인합니다.</span>
+                <span>반 학생들에게 연결된 과수원ON을 한 번에 확인합니다.</span>
               </div>
             </div>
             <div class="inline-form">
@@ -566,7 +566,7 @@
             <div class="section-split classroom-student-grid">
               <section class="panel">
                 <div class="panel-heading">
-                  <h2>수업방 목록</h2>
+                  <h2>과수원ON 목록</h2>
                   <span id="classRoomPreviewCount">0개</span>
                 </div>
                 <div class="student-classroom-list" id="classRoomPreviewList"></div>
@@ -584,7 +584,7 @@
           <section class="panel student-room-login" id="studentRoomLogin">
             <div class="panel-heading">
               <h2>학생별 미리보기</h2>
-              <span>학생 한 명의 내 수업방 보기</span>
+              <span>학생 한 명의 과수원ON 보기</span>
             </div>
             <div class="inline-form">
               <label class="field-label">
@@ -600,7 +600,7 @@
           <section class="student-room-area" id="studentRoomArea" hidden>
             <div class="student-room-head">
               <div>
-                <span>과수원ON · 내 수업방</span>
+                <span>과수원ON · 내 학습공간</span>
                 <strong id="studentRoomNameLabel"></strong>
               </div>
               <button class="ghost-button" id="studentRoomLogoutBtn" type="button">나가기</button>
@@ -608,7 +608,7 @@
             <div class="section-split classroom-student-grid">
               <section class="panel">
                 <div class="panel-heading">
-                  <h2>수업방 목록</h2>
+                  <h2>과수원ON 목록</h2>
                   <span id="studentRoomCountLabel">0개</span>
                 </div>
                 <div class="student-classroom-list" id="studentClassroomList"></div>
@@ -1056,7 +1056,7 @@
         <div class="dialog-heading">
           <div>
             <h2 id="memberDialogTitle">학생 명단</h2>
-            <p id="memberDialogHint">수업방에 연결된 학생과 로그인 아이디를 확인할 수 있습니다.</p>
+            <p id="memberDialogHint">과수원ON에 연결된 학생과 로그인 아이디를 확인할 수 있습니다.</p>
           </div>
           <button class="icon-button" id="closeMemberDialogBtn" aria-label="닫기" type="button">×</button>
         </div>
