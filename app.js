@@ -45,6 +45,8 @@ let classroomMemberAccess = {};
 let memberDialogStudents = [];
 let memberDialogRoomId = "";
 let currentClassPreviewRoomId = "";
+let currentAdminClassroomRoomId = "";
+let showAllRecentClassroomPosts = false;
 let classroomImageDraft = [];
 let pendingClassroomImageFiles = [];
 let classroomImagesMarkedForDeletion = new Set();
@@ -788,7 +790,10 @@ function bindEvents() {
   $("#saveWaitBtn").addEventListener("click", saveWaitlistFromForm);
   $("#clearWaitBtn").addEventListener("click", clearWaitlistForm);
   $("#saveClassroomBtn").addEventListener("click", saveClassroomFromForm);
-  $("#clearClassroomBtn").addEventListener("click", clearClassroomForm);
+  $("#clearClassroomBtn").addEventListener("click", closeClassroomDialog);
+  $("#openClassroomCreateDialogBtn").addEventListener("click", openNewClassroomDialog);
+  $("#showAllClassroomPostsBtn").addEventListener("click", () => { showAllRecentClassroomPosts = !showAllRecentClassroomPosts; renderAdminClassroomPosts(); });
+  $("#showRecentClassroomPostsBtn").addEventListener("click", showRecentClassroomPosts);
   $("#classroomGradeSelect").addEventListener("change", () => renderClassroomMemberChecks());
   $("#classroomVisibleGradeAll").addEventListener("change", (event) => setVisibleClassroomMembers(event.target.checked));
   $("#clearAllMembersBtn").addEventListener("click", clearAllClassroomMembers);
@@ -796,7 +801,7 @@ function bindEvents() {
   $("#clearClassroomPostBtn").addEventListener("click", clearClassroomPostForm);
   $("#addYoutubeLinkBtn").addEventListener("click", () => addYoutubeLinkRow());
   $("#classroomImageInput").addEventListener("change", addClassroomImageFiles);
-  $("#postClassroomSelect").addEventListener("change", renderAdminClassroomPosts);
+  $("#postClassroomSelect").addEventListener("change", () => selectAdminClassroom($("#postClassroomSelect").value));
   $("#studentRoomLoginBtn").addEventListener("click", loginStudentRoom);
   $("#studentRoomLogoutBtn").addEventListener("click", logoutStudentRoom);
   $("#classRoomPreviewBtn").addEventListener("click", renderClassRoomPreview);
@@ -3047,6 +3052,16 @@ function clearClassroomForm() {
   renderClassroomMemberChecks([]);
 }
 
+function openNewClassroomDialog() {
+  clearClassroomForm();
+  $("#classroomEditorPanel")?.showModal();
+}
+
+function closeClassroomDialog() {
+  $("#classroomEditorPanel")?.close();
+  clearClassroomForm();
+}
+
 function saveClassroomFromForm() {
   const id = $("#classroomIdInput").value || crypto.randomUUID();
   const existing = state.classrooms.find((room) => room.id === id);
@@ -3068,6 +3083,8 @@ function saveClassroomFromForm() {
   }
   state.classrooms = existing ? state.classrooms.map((item) => (item.id === id ? room : item)) : [...state.classrooms, room];
   saveState();
+  currentAdminClassroomRoomId = room.id;
+  $("#classroomEditorPanel")?.close();
   clearClassroomForm();
   renderClassrooms();
   renderStudentClassroomView();
@@ -3083,7 +3100,7 @@ function editClassroom(roomId) {
   $("#classroomPublicInput").checked = isClassroomPublic(room);
   $("#classroomFormMode").textContent = "수업방 수정";
   renderClassroomMemberChecks(room.memberStudentIds || [], room.memberAccess || {});
-  $("#classroomEditorPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#classroomEditorPanel")?.showModal();
 }
 
 function deleteClassroom(roomId) {
@@ -3091,6 +3108,7 @@ function deleteClassroom(roomId) {
   if (!room || !confirm(`${room.name} 수업방을 삭제할까요? 게시글도 함께 삭제됩니다.`)) return;
   state.classrooms = state.classrooms.filter((item) => item.id !== roomId);
   if (currentStudentRoomId === roomId) currentStudentRoomId = "";
+  if (currentAdminClassroomRoomId === roomId) currentAdminClassroomRoomId = "";
   saveState();
   clearClassroomForm();
   renderClassrooms();
@@ -3100,10 +3118,28 @@ function deleteClassroom(roomId) {
 function openClassroomPosts(roomId) {
   const room = state.classrooms.find((item) => item.id === roomId);
   if (!room) return;
+  if (currentAdminClassroomRoomId === room.id) {
+    showRecentClassroomPosts();
+    return;
+  }
+  currentAdminClassroomRoomId = room.id;
   $("#postClassroomSelect").value = room.id;
-  $$(".classroom-card").forEach((card) => card.classList.toggle("selected", card.dataset.roomId === room.id));
+  renderClassroomList();
   renderAdminClassroomPosts();
-  $("#adminClassroomPosts")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function selectAdminClassroom(roomId) {
+  if (!state.classrooms.some((room) => room.id === roomId)) return;
+  currentAdminClassroomRoomId = roomId;
+  renderClassroomList();
+  renderAdminClassroomPosts();
+}
+
+function showRecentClassroomPosts() {
+  currentAdminClassroomRoomId = "";
+  showAllRecentClassroomPosts = false;
+  renderClassroomList();
+  renderAdminClassroomPosts();
 }
 
 function renderClassroomList() {
@@ -3116,7 +3152,7 @@ function renderClassroomList() {
             .filter(Boolean)
             .join(", ");
           return `
-            <article class="classroom-card" data-room-id="${room.id}">
+            <article class="classroom-card ${currentAdminClassroomRoomId === room.id ? "selected" : ""}" data-room-id="${room.id}">
               <div>
                 <button class="link-name-button" type="button" onclick="openClassroomPosts('${room.id}')">${room.name}</button>
                 <p>${room.description || "설명 없음"}</p>
@@ -3140,13 +3176,14 @@ function renderClassroomList() {
 
 function renderPostClassroomOptions() {
   const selectedRoomId = $("#postClassroomSelect")?.value || "";
+  const preferredRoomId = currentAdminClassroomRoomId || selectedRoomId;
   $("#postClassroomSelect").innerHTML = state.classrooms.length
     ? sortClassroomsByName(state.classrooms)
         .map((room) => `<option value="${room.id}">${room.name}${isClassroomPublic(room) ? "" : " (비공개)"}</option>`)
         .join("")
     : `<option value="">수업방 없음</option>`;
-  if (selectedRoomId && state.classrooms.some((room) => room.id === selectedRoomId)) {
-    $("#postClassroomSelect").value = selectedRoomId;
+  if (preferredRoomId && state.classrooms.some((room) => room.id === preferredRoomId)) {
+    $("#postClassroomSelect").value = preferredRoomId;
   }
 }
 
@@ -3435,11 +3472,32 @@ async function deleteClassroomPost(roomId, postId) {
 }
 
 function renderAdminClassroomPosts() {
-  const roomId = $("#postClassroomSelect").value;
-  const room = state.classrooms.find((item) => item.id === roomId);
-  $("#adminClassroomPosts").innerHTML = room?.posts.length
-    ? [...room.posts].sort((a, b) => b.createdAt - a.createdAt).map((post) => renderClassroomPostCard(room.id, post, true)).join("")
-    : `<div class="empty-state">선택한 수업방에 게시글이 없습니다.</div>`;
+  const selectedRoom = state.classrooms.find((room) => room.id === currentAdminClassroomRoomId);
+  const allPosts = state.classrooms
+    .flatMap((room) => (room.posts || []).map((post) => ({ room, post })))
+    .sort((a, b) => Number(b.post.updatedAt || b.post.createdAt || 0) - Number(a.post.updatedAt || a.post.createdAt || 0));
+  const entries = selectedRoom
+    ? allPosts.filter((entry) => entry.room.id === selectedRoom.id)
+    : (showAllRecentClassroomPosts ? allPosts : allPosts.slice(0, 5));
+  $("#adminClassroomPostsTitle").textContent = selectedRoom ? `${selectedRoom.name} 게시글` : "최근 업로드";
+  $("#adminClassroomPostsHint").textContent = selectedRoom
+    ? `지금까지 올린 게시글 ${entries.length}개입니다. 제목을 누르면 내용이 펼쳐집니다.`
+    : `모든 수업방의 게시글 ${allPosts.length}개 중 ${entries.length}개를 최신순으로 표시합니다.`;
+  $("#showRecentClassroomPostsBtn").hidden = !selectedRoom;
+  $("#showAllClassroomPostsBtn").hidden = Boolean(selectedRoom) || allPosts.length <= 5;
+  $("#showAllClassroomPostsBtn").textContent = showAllRecentClassroomPosts ? "5개만 보기" : "전체 펼치기";
+  $("#adminClassroomPosts").innerHTML = entries.length
+    ? entries.map(({ room, post }) => `
+        <details class="classroom-post-summary">
+          <summary>
+            <span class="classroom-post-room">${scoreEscape(room.name)}</span>
+            <strong>${scoreEscape(post.title || "제목 없음")}</strong>
+            <time>${scoreEscape(post.lessonDate ? formatLessonDate(post.lessonDate) : formatDateTime(post.createdAt))}</time>
+          </summary>
+          <div class="classroom-post-summary-content">${renderClassroomPostCard(room.id, post, true)}</div>
+        </details>
+      `).join("")
+    : `<div class="empty-state">${selectedRoom ? "이 수업방에는 아직 게시글이 없습니다." : "아직 업로드한 게시글이 없습니다."}</div>`;
   hydrateClassroomImages($("#adminClassroomPosts"), "./api/classroom-images");
 }
 

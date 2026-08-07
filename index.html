@@ -398,8 +398,17 @@
             <span>수업방 접근 권한은 학생정보를 수정하지 않고, 이 화면의 체크 목록으로만 연결됩니다.</span>
           </div>
 
+          <div class="classroom-admin-toolbar">
+            <div>
+              <h2>수업방 관리</h2>
+              <span>왼쪽에서 반을 선택하면 오른쪽에서 지금까지 올린 게시글을 바로 확인할 수 있습니다.</span>
+            </div>
+            <button class="primary-button" id="openClassroomCreateDialogBtn" type="button">+ 수업방 만들기</button>
+          </div>
+
           <div class="section-split classroom-admin-grid">
-            <section class="panel classroom-editor-panel" id="classroomEditorPanel">
+            <dialog class="classroom-editor-dialog" id="classroomEditorPanel">
+              <div class="classroom-dialog-card">
               <div class="panel-heading">
                 <h2>수업방 만들기/수정</h2>
                 <span id="classroomFormMode">새 수업방</span>
@@ -441,9 +450,10 @@
                   <div class="member-checks" id="classroomMemberList"></div>
                 </div>
                 <button class="primary-button" id="saveClassroomBtn" type="button">수업방 저장</button>
-                <button class="ghost-button" id="clearClassroomBtn" type="button">새로 입력</button>
+                <button class="ghost-button" id="clearClassroomBtn" type="button">취소</button>
               </div>
-            </section>
+              </div>
+            </dialog>
 
             <section class="panel classroom-list-panel">
               <div class="panel-heading">
@@ -451,6 +461,20 @@
                 <span id="classroomCountLabel">0개</span>
               </div>
               <div class="classroom-list" id="classroomList"></div>
+            </section>
+
+            <section class="panel classroom-post-overview-panel">
+              <div class="panel-heading classroom-post-overview-heading">
+                <div>
+                  <h2 id="adminClassroomPostsTitle">최근 업로드</h2>
+                  <span id="adminClassroomPostsHint">모든 수업방에서 최근에 올린 게시글 5개입니다.</span>
+                </div>
+                <div class="row-actions">
+                  <button class="mini-button" id="showAllClassroomPostsBtn" type="button">전체 펼치기</button>
+                  <button class="mini-button" id="showRecentClassroomPostsBtn" type="button" hidden>전체 최근 글 보기</button>
+                </div>
+              </div>
+              <div class="classroom-post-board compact" id="adminClassroomPosts"></div>
             </section>
           </div>
 
@@ -515,7 +539,6 @@
               <button class="primary-button" id="saveClassroomPostBtn" type="button">게시글 저장</button>
               <button class="ghost-button" id="clearClassroomPostBtn" type="button">새 글</button>
             </div>
-            <div class="classroom-post-board" id="adminClassroomPosts"></div>
           </section>
         </section>
 
