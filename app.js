@@ -206,15 +206,40 @@ function isClassroomPublic(room) {
   return getClassroomPublicFlag(room);
 }
 
+function getIndividualYoutubeUrl(value = "") {
+  const original = String(value || "").trim();
+  if (!original) return "";
+  try {
+    const parsed = new URL(original);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    let videoId = "";
+    if (host === "youtu.be") {
+      videoId = parsed.pathname.split("/").filter(Boolean)[0] || "";
+    } else if (host === "youtube.com" || host.endsWith(".youtube.com")) {
+      if (parsed.pathname === "/watch") videoId = parsed.searchParams.get("v") || "";
+      if (!videoId) videoId = parsed.pathname.match(/^\/(?:shorts|embed|live)\/([^/?#]+)/)?.[1] || "";
+    }
+    if (!/^[A-Za-z0-9_-]{6,}$/.test(videoId)) return original;
+    const cleaned = new URL("https://www.youtube.com/watch");
+    cleaned.searchParams.set("v", videoId);
+    const startAt = parsed.searchParams.get("t") || parsed.searchParams.get("start");
+    if (startAt) cleaned.searchParams.set("t", startAt);
+    return cleaned.toString();
+  } catch (error) {
+    return original;
+  }
+}
+
 function normalizeYoutubeLinks(links = [], legacyLink = "") {
   const normalized = Array.isArray(links)
     ? links
         .map((item) => ({
           title: String(item.title || "").trim(),
-          url: String(item.url || item.link || "").trim(),
+          url: getIndividualYoutubeUrl(item.url || item.link),
         }))
         .filter((item) => item.url)
     : [];
+  legacyLink = getIndividualYoutubeUrl(legacyLink);
   if (legacyLink && !normalized.some((item) => item.url === legacyLink)) {
     normalized.unshift({ title: "수업 링크", url: legacyLink });
   }
@@ -3279,7 +3304,7 @@ function getYoutubeLinksFromForm() {
   return $$("#youtubeLinkList .youtube-link-row")
     .map((row) => ({
       title: row.querySelector(".youtube-title-input").value.trim(),
-      url: row.querySelector(".youtube-url-input").value.trim(),
+      url: getIndividualYoutubeUrl(row.querySelector(".youtube-url-input").value),
     }))
     .filter((link) => link.url);
 }

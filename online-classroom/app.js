@@ -57,6 +57,30 @@ function formatLessonDate(value) {
   return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" }).format(new Date(`${value}T00:00:00`));
 }
 
+function getIndividualYoutubeUrl(value = "") {
+  const original = String(value || "").trim();
+  if (!original) return "";
+  try {
+    const parsed = new URL(original);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    let videoId = "";
+    if (host === "youtu.be") {
+      videoId = parsed.pathname.split("/").filter(Boolean)[0] || "";
+    } else if (host === "youtube.com" || host.endsWith(".youtube.com")) {
+      if (parsed.pathname === "/watch") videoId = parsed.searchParams.get("v") || "";
+      if (!videoId) videoId = parsed.pathname.match(/^\/(?:shorts|embed|live)\/([^/?#]+)/)?.[1] || "";
+    }
+    if (!/^[A-Za-z0-9_-]{6,}$/.test(videoId)) return original;
+    const cleaned = new URL("https://www.youtube.com/watch");
+    cleaned.searchParams.set("v", videoId);
+    const startAt = parsed.searchParams.get("t") || parsed.searchParams.get("start");
+    if (startAt) cleaned.searchParams.set("t", startAt);
+    return cleaned.toString();
+  } catch (error) {
+    return original;
+  }
+}
+
 function getClassroomLinkLabel(link, index = 0) {
   const title = link.title || `수업 링크 ${index + 1}`;
   const url = String(link.url || "");
@@ -261,7 +285,7 @@ function renderPost(post) {
         ${links
           .map(
             (link, index) => `
-              <a class="classroom-link" href="${link.url}" target="_blank" rel="noreferrer">
+              <a class="classroom-link" href="${getIndividualYoutubeUrl(link.url)}" target="_blank" rel="noreferrer">
                 <span>${getClassroomLinkLabel(link, index)}</span>
                 <small>열기</small>
               </a>
