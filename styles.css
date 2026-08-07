@@ -1031,6 +1031,11 @@ td {
   gap: 16px;
 }
 
+.class-room-preview-panel + .student-room-login,
+.student-room-area {
+  margin-top: 22px;
+}
+
 .class-preview-summary {
   display: grid;
   gap: 5px;

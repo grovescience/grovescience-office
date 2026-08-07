@@ -504,48 +504,6 @@
             <span>원장님은 비공개·이용 전·기간 종료 수업방도 확인할 수 있습니다. 실제 과수원ON에서는 설정한 공개 범위와 이용기간이 적용됩니다.</span>
           </div>
 
-          <section class="panel student-room-login" id="studentRoomLogin">
-            <div class="panel-heading">
-              <h2>학생 입장</h2>
-              <span>내 수업방 보기</span>
-            </div>
-            <div class="inline-form">
-              <label class="field-label">
-                학생
-                <select id="studentRoomLoginSelect"></select>
-              </label>
-              <input id="studentRoomCodeInput" type="hidden" />
-              <button class="primary-button" id="studentRoomLoginBtn" type="button">관리자 미리보기</button>
-            </div>
-            <div class="class-preview-summary" id="studentRoomLoginMessage" hidden></div>
-          </section>
-
-          <section class="student-room-area" id="studentRoomArea" hidden>
-            <div class="student-room-head">
-              <div>
-                <span>과수원ON · 내 수업방</span>
-                <strong id="studentRoomNameLabel"></strong>
-              </div>
-              <button class="ghost-button" id="studentRoomLogoutBtn" type="button">나가기</button>
-            </div>
-            <div class="section-split classroom-student-grid">
-              <section class="panel">
-                <div class="panel-heading">
-                  <h2>수업방 목록</h2>
-                  <span id="studentRoomCountLabel">0개</span>
-                </div>
-                <div class="student-classroom-list" id="studentClassroomList"></div>
-              </section>
-              <section class="panel">
-                <div class="panel-heading">
-                  <h2 id="studentClassroomTitle">게시글</h2>
-                  <span>최신순</span>
-                </div>
-                <div class="student-post-list" id="studentPostList"></div>
-              </section>
-            </div>
-          </section>
-
           <section class="panel class-room-preview-panel">
             <div class="panel-heading">
               <div>
@@ -575,6 +533,48 @@
                   <span>최신순</span>
                 </div>
                 <div class="student-post-list" id="classRoomPreviewPosts"></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="panel student-room-login" id="studentRoomLogin">
+            <div class="panel-heading">
+              <h2>학생별 미리보기</h2>
+              <span>학생 한 명의 내 수업방 보기</span>
+            </div>
+            <div class="inline-form">
+              <label class="field-label">
+                학생
+                <select id="studentRoomLoginSelect"></select>
+              </label>
+              <input id="studentRoomCodeInput" type="hidden" />
+              <button class="primary-button" id="studentRoomLoginBtn" type="button">학생 미리보기</button>
+            </div>
+            <div class="class-preview-summary" id="studentRoomLoginMessage" hidden></div>
+          </section>
+
+          <section class="student-room-area" id="studentRoomArea" hidden>
+            <div class="student-room-head">
+              <div>
+                <span>과수원ON · 내 수업방</span>
+                <strong id="studentRoomNameLabel"></strong>
+              </div>
+              <button class="ghost-button" id="studentRoomLogoutBtn" type="button">나가기</button>
+            </div>
+            <div class="section-split classroom-student-grid">
+              <section class="panel">
+                <div class="panel-heading">
+                  <h2>수업방 목록</h2>
+                  <span id="studentRoomCountLabel">0개</span>
+                </div>
+                <div class="student-classroom-list" id="studentClassroomList"></div>
+              </section>
+              <section class="panel">
+                <div class="panel-heading">
+                  <h2 id="studentClassroomTitle">게시글</h2>
+                  <span>최신순</span>
+                </div>
+                <div class="student-post-list" id="studentPostList"></div>
               </section>
             </div>
           </section>
