@@ -43,6 +43,7 @@ let currentStudentRoomId = "";
 let classroomMemberSelection = new Set();
 let classroomMemberAccess = {};
 let memberDialogStudents = [];
+let memberDialogRoomId = "";
 let classroomImageDraft = [];
 let pendingClassroomImageFiles = [];
 let classroomImagesMarkedForDeletion = new Set();
@@ -782,6 +783,7 @@ function bindEvents() {
   $("#clearScoreExamBtn").addEventListener("click", clearScoreExamForm);
   $("#closeScoreRankingBtn").addEventListener("click", () => $("#scoreRankingDialog").close());
   $("#closeMemberDialogBtn").addEventListener("click", () => $("#memberDialog").close());
+  $("#addMemberDialogStudentBtn").addEventListener("click", addStudentFromMemberDialog);
   $("#calendarPrevBtn").addEventListener("click", () => { calendarCursor.setMonth(calendarCursor.getMonth() - 1); renderScheduleCalendar(); });
   $("#calendarNextBtn").addEventListener("click", () => { calendarCursor.setMonth(calendarCursor.getMonth() + 1); renderScheduleCalendar(); });
   $("#calendarTodayBtn").addEventListener("click", () => { calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1); selectScheduleDate(today()); });
@@ -1356,14 +1358,20 @@ function openClassroomStudentList(roomId) {
   if (!room) return;
   const ids = new Set(room.memberStudentIds || []);
   const students = sortStudentsByGradeName(state.students.filter((student) => ids.has(student.id)));
-  openMemberDialog(`${room.name} 수업방 학생 명단`, students);
+  openMemberDialog(`${room.name} 수업방 학생 명단`, students, room.id);
 }
 
-function openMemberDialog(title, students) {
+function openMemberDialog(title, students, roomId = "") {
   ensureStudentClassroomCodes();
   memberDialogStudents = students;
+  memberDialogRoomId = roomId;
   $("#memberDialogTitle").textContent = title;
   $("#memberDialogCount").textContent = `${students.length}명`;
+  $("#memberDialogHint").textContent = roomId
+    ? "이 수업방에 연결된 학생을 확인하고 바로 추가하거나 제외할 수 있습니다."
+    : "연결된 학생과 로그인 아이디를 확인할 수 있습니다.";
+  $("#memberDialogAddTools").hidden = !roomId;
+  renderMemberDialogStudentOptions();
   $("#memberDialogTable").innerHTML = students.length
     ? students
         .map(
@@ -1373,12 +1381,54 @@ function openMemberDialog(title, students) {
               <td>${student.school || "-"}<br>${student.grade || "-"}</td>
               <td>${student.className || "-"}</td>
               <td><strong>${student.loginId || "미발급"}</strong></td>
+              <td>${roomId ? `<button class="mini-button danger" type="button" onclick="removeStudentFromMemberDialog('${student.id}')">제외</button>` : "-"}</td>
             </tr>
           `,
         )
         .join("")
-    : `<tr><td colspan="4">연결된 학생이 없습니다.</td></tr>`;
-  $("#memberDialog").showModal();
+    : `<tr><td colspan="5">연결된 학생이 없습니다.</td></tr>`;
+  if (!$("#memberDialog").open) $("#memberDialog").showModal();
+}
+
+function renderMemberDialogStudentOptions() {
+  const select = $("#memberDialogStudentSelect");
+  if (!select || !memberDialogRoomId) return;
+  const assignedIds = new Set(memberDialogStudents.map((student) => student.id));
+  const available = sortStudentsByGradeName(
+    state.students.filter((student) => student.status !== "퇴원" && !assignedIds.has(student.id)),
+  );
+  select.innerHTML = available.length
+    ? `<option value="">추가할 학생 선택</option>${available.map((student) => `<option value="${student.id}">${student.grade || "-"} · ${student.name} · ${getStudentClassNames(student).join(", ") || "반 미지정"}</option>`).join("")}`
+    : `<option value="">추가할 수 있는 학생 없음</option>`;
+  $("#addMemberDialogStudentBtn").disabled = !available.length;
+}
+
+function addStudentFromMemberDialog() {
+  const studentId = $("#memberDialogStudentSelect").value;
+  if (!memberDialogRoomId || !studentId) return alert("추가할 학생을 선택해주세요.");
+  state.classrooms = state.classrooms.map((room) => {
+    if (room.id !== memberDialogRoomId) return room;
+    const memberStudentIds = [...new Set([...(room.memberStudentIds || []), studentId])];
+    const memberAccess = { ...(room.memberAccess || {}), [studentId]: { startDate: today(), endDate: "" } };
+    return { ...room, memberStudentIds, memberAccess };
+  });
+  saveState();
+  renderClassrooms();
+  openClassroomStudentList(memberDialogRoomId);
+}
+
+function removeStudentFromMemberDialog(studentId) {
+  const student = state.students.find((item) => item.id === studentId);
+  if (!memberDialogRoomId || !student || !confirm(`${student.name} 학생을 이 수업방에서 제외할까요?\n학생정보 자체는 삭제되지 않습니다.`)) return;
+  state.classrooms = state.classrooms.map((room) => {
+    if (room.id !== memberDialogRoomId) return room;
+    const memberAccess = { ...(room.memberAccess || {}) };
+    delete memberAccess[studentId];
+    return { ...room, memberStudentIds: (room.memberStudentIds || []).filter((id) => id !== studentId), memberAccess };
+  });
+  saveState();
+  renderClassrooms();
+  openClassroomStudentList(memberDialogRoomId);
 }
 
 async function copyMemberDialogCodes() {
@@ -3731,6 +3781,7 @@ window.openClassroomPosts = openClassroomPosts;
 window.editClassroom = editClassroom;
 window.deleteClassroom = deleteClassroom;
 window.openClassroomStudentList = openClassroomStudentList;
+window.removeStudentFromMemberDialog = removeStudentFromMemberDialog;
 window.editClassroomPost = editClassroomPost;
 window.deleteClassroomPost = deleteClassroomPost;
 window.openStudentClassroom = openStudentClassroom;

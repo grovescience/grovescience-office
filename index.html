@@ -971,6 +971,10 @@
         </div>
         <div class="member-dialog-actions">
           <span id="memberDialogCount">0명</span>
+          <div id="memberDialogAddTools" class="inline-form" hidden>
+            <select id="memberDialogStudentSelect" aria-label="추가할 학생"></select>
+            <button class="primary-button" id="addMemberDialogStudentBtn" type="button">학생 추가</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table>
@@ -980,6 +984,7 @@
                 <th>학교/학년</th>
                 <th>수강반</th>
                 <th>로그인 아이디</th>
+                <th>관리</th>
               </tr>
             </thead>
             <tbody id="memberDialogTable"></tbody>
