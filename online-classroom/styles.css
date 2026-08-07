@@ -269,6 +269,33 @@ a:focus-visible {
   gap: 8px;
 }
 
+.classroom-image-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.classroom-image-gallery img,
+.classroom-image-placeholder {
+  width: 100%;
+  min-height: 150px;
+  max-height: 440px;
+  display: block;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #eef4ea;
+}
+
+.classroom-image-placeholder {
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
 .classroom-link {
   min-height: 38px;
   display: flex;

@@ -43,6 +43,9 @@ let currentStudentRoomId = "";
 let classroomMemberSelection = new Set();
 let classroomMemberAccess = {};
 let memberDialogStudents = [];
+let classroomImageDraft = [];
+let pendingClassroomImageFiles = [];
+let classroomImagesMarkedForDeletion = new Set();
 let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let selectedScheduleDate = today();
 
@@ -178,6 +181,7 @@ function normalizeClassrooms(classrooms = []) {
         content: post.content || "",
         link: post.link || "",
         links: normalizeYoutubeLinks(post.links, post.link),
+        images: normalizeClassroomImages(post.images),
         openToAll: Boolean(post.openToAll),
         lessonDate: normalizeDateValue(post.lessonDate) || "",
         createdAt: post.createdAt || Date.now(),
@@ -213,6 +217,14 @@ function normalizeYoutubeLinks(links = [], legacyLink = "") {
     normalized.unshift({ title: "수업 링크", url: legacyLink });
   }
   return normalized;
+}
+
+function normalizeClassroomImages(images = []) {
+  return Array.isArray(images)
+    ? images
+        .map((image) => ({ path: String(image?.path || "").trim(), name: String(image?.name || "수업 이미지").trim() }))
+        .filter((image) => image.path.startsWith("classroom/"))
+    : [];
 }
 
 function normalizeDateValue(value) {
@@ -676,6 +688,7 @@ function setup() {
   syncAttendanceRoundControl();
   renderClassroomStudentOptions();
   renderYoutubeLinkRows([]);
+  resetClassroomImageEditor();
   syncScheduleMoveFields();
 
   bindEvents();
@@ -753,6 +766,7 @@ function bindEvents() {
   $("#saveClassroomPostBtn").addEventListener("click", saveClassroomPostFromForm);
   $("#clearClassroomPostBtn").addEventListener("click", clearClassroomPostForm);
   $("#addYoutubeLinkBtn").addEventListener("click", () => addYoutubeLinkRow());
+  $("#classroomImageInput").addEventListener("change", addClassroomImageFiles);
   $("#postClassroomSelect").addEventListener("change", renderAdminClassroomPosts);
   $("#studentRoomLoginBtn").addEventListener("click", loginStudentRoom);
   $("#studentRoomLogoutBtn").addEventListener("click", logoutStudentRoom);
@@ -2792,6 +2806,125 @@ function clearClassroomPostForm() {
   $("#postContentInput").value = "";
   $("#classroomPostLessonDateInput").value = today();
   renderYoutubeLinkRows([]);
+  resetClassroomImageEditor();
+}
+
+function resetClassroomImageEditor(images = []) {
+  pendingClassroomImageFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+  classroomImageDraft = normalizeClassroomImages(images);
+  pendingClassroomImageFiles = [];
+  classroomImagesMarkedForDeletion = new Set();
+  if ($("#classroomImageInput")) $("#classroomImageInput").value = "";
+  renderClassroomImageEditor();
+}
+
+function addClassroomImageFiles(event) {
+  const files = Array.from(event.target.files || []);
+  const totalAfterAdd = classroomImageDraft.length + pendingClassroomImageFiles.length + files.length;
+  if (totalAfterAdd > 8) {
+    alert("게시글 하나에는 이미지를 최대 8장까지 올릴 수 있습니다.");
+    event.target.value = "";
+    return;
+  }
+  for (const file of files) {
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      alert(`${file.name} 파일은 JPG, PNG, WEBP, GIF 이미지가 아닙니다.`);
+      continue;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      alert(`${file.name} 파일은 3MB를 초과하여 올릴 수 없습니다.`);
+      continue;
+    }
+    pendingClassroomImageFiles.push({ file, previewUrl: URL.createObjectURL(file) });
+  }
+  event.target.value = "";
+  renderClassroomImageEditor();
+}
+
+function removeClassroomImage(kind, index) {
+  if (kind === "saved") {
+    const [removed] = classroomImageDraft.splice(index, 1);
+    if (removed?.path) classroomImagesMarkedForDeletion.add(removed.path);
+  } else {
+    const [removed] = pendingClassroomImageFiles.splice(index, 1);
+    if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+  }
+  renderClassroomImageEditor();
+}
+
+function renderClassroomImageEditor() {
+  const container = $("#classroomImageList");
+  if (!container) return;
+  const saved = classroomImageDraft.map((image, index) => `
+    <figure class="classroom-image-item">
+      <div class="classroom-image-placeholder" data-classroom-image-path="${image.path}">이미지 불러오는 중</div>
+      <button class="image-remove-button" type="button" onclick="removeClassroomImage('saved', ${index})" aria-label="이미지 삭제">×</button>
+    </figure>
+  `);
+  const pending = pendingClassroomImageFiles.map((item, index) => `
+    <figure class="classroom-image-item">
+      <img src="${item.previewUrl}" alt="새 수업 이미지 미리보기" />
+      <button class="image-remove-button" type="button" onclick="removeClassroomImage('pending', ${index})" aria-label="이미지 삭제">×</button>
+    </figure>
+  `);
+  container.innerHTML = [...saved, ...pending].join("") || `<div class="empty-image-state">추가된 이미지가 없습니다.</div>`;
+  hydrateClassroomImages(container, "./api/classroom-images");
+}
+
+async function getOfficeAccessToken() {
+  const { data } = await window.officeAuthClient?.auth?.getSession?.() || { data: {} };
+  return data?.session?.access_token || "";
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.onerror = () => reject(new Error("이미지 파일을 읽지 못했습니다."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadClassroomImage(item, roomId, postId, accessToken) {
+  const response = await fetch("./api/classroom-images", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ roomId, postId, name: item.file.name, contentType: item.file.type, data: await fileToBase64(item.file) }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || `${item.file.name} 이미지를 올리지 못했습니다.`);
+  return result;
+}
+
+async function deleteClassroomImageFromStorage(path, accessToken) {
+  if (!path || !accessToken) return;
+  await fetch("./api/classroom-images", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ path }),
+  });
+}
+
+async function hydrateClassroomImages(container = document, endpoint = "./api/classroom-images", accessToken = "") {
+  const targets = Array.from(container.querySelectorAll("[data-classroom-image-path]"));
+  if (!targets.length) return;
+  const token = accessToken || await getOfficeAccessToken();
+  if (!token) return;
+  await Promise.all(targets.map(async (target) => {
+    const path = target.dataset.classroomImagePath;
+    try {
+      const response = await fetch(`${endpoint}?path=${encodeURIComponent(path)}`, { headers: { Authorization: `Bearer ${token}` } });
+      const result = await response.json();
+      if (!response.ok || !result.url) throw new Error();
+      const image = document.createElement("img");
+      image.src = result.url;
+      image.alt = "수업 이미지";
+      image.loading = "lazy";
+      target.replaceWith(image);
+    } catch (error) {
+      target.textContent = "이미지를 불러오지 못했습니다.";
+    }
+  }));
 }
 
 function addYoutubeLinkRow(link = { title: "", url: "" }) {
@@ -2841,7 +2974,7 @@ function getClassroomLinkLabel(link, index = 0) {
   return /(?:youtube\.com|youtu\.be)/i.test(url) ? `${title} (유튜브 링크 바로가기)` : title;
 }
 
-function saveClassroomPostFromForm() {
+async function saveClassroomPostFromForm() {
   const roomId = $("#postClassroomSelect").value;
   const room = state.classrooms.find((item) => item.id === roomId);
   if (!room) {
@@ -2851,26 +2984,65 @@ function saveClassroomPostFromForm() {
   const postId = $("#classroomPostIdInput").value || crypto.randomUUID();
   const existing = room.posts.find((post) => post.id === postId);
   const youtubeLinks = getYoutubeLinksFromForm();
+  const title = $("#postTitleInput").value.trim();
+  if (!title) {
+    alert("게시글 제목을 입력해주세요.");
+    return;
+  }
+  const saveButton = $("#saveClassroomPostBtn");
+  const accessToken = await getOfficeAccessToken();
+  if (!accessToken && pendingClassroomImageFiles.length) {
+    alert("이미지를 올리려면 온라인 관리자 로그인이 필요합니다.");
+    return;
+  }
+  saveButton.disabled = true;
+  saveButton.textContent = pendingClassroomImageFiles.length ? "이미지 올리는 중" : "게시글 저장 중";
+  let uploadedImages = [];
+  try {
+    for (const item of pendingClassroomImageFiles) {
+      uploadedImages.push(await uploadClassroomImage(item, roomId, postId, accessToken));
+    }
+  } catch (error) {
+    await Promise.all(uploadedImages.map((image) => deleteClassroomImageFromStorage(image.path, accessToken)));
+    saveButton.disabled = false;
+    saveButton.textContent = "게시글 저장";
+    alert(error.message || "이미지를 올리지 못했습니다.");
+    return;
+  }
   const post = {
     id: postId,
     type: $("#postTypeInput").value,
-    title: $("#postTitleInput").value.trim(),
+    title,
     links: youtubeLinks,
     link: youtubeLinks[0]?.url || "",
     content: $("#postContentInput").value.trim(),
+    images: [...classroomImageDraft, ...uploadedImages],
     openToAll: $("#postOpenToAllInput").checked,
     lessonDate: $("#classroomPostLessonDateInput").value || today(),
     createdAt: existing?.createdAt || Date.now(),
     updatedAt: Date.now(),
   };
-  if (!post.title) {
-    alert("게시글 제목을 입력해주세요.");
-    return;
-  }
+  const previousPosts = [...room.posts];
+  const previousUpdatedAt = room.updatedAt;
   room.posts = existing ? room.posts.map((item) => (item.id === postId ? post : item)) : [post, ...room.posts];
   room.updatedAt = Date.now();
   state.classrooms = state.classrooms.map((item) => (item.id === room.id ? room : item));
-  saveState();
+  saveState({ localOnly: true });
+  const onlineSaved = await saveStateToServer();
+  if (!onlineSaved) {
+    room.posts = previousPosts;
+    room.updatedAt = previousUpdatedAt;
+    state.classrooms = state.classrooms.map((item) => (item.id === room.id ? room : item));
+    saveState({ localOnly: true });
+    await Promise.all(uploadedImages.map((image) => deleteClassroomImageFromStorage(image.path, accessToken)));
+    saveButton.disabled = false;
+    saveButton.textContent = "게시글 저장";
+    alert(`게시글을 온라인에 저장하지 못했습니다.\n${lastServerSaveError || "잠시 후 다시 시도해주세요."}`);
+    return;
+  }
+  await Promise.all([...classroomImagesMarkedForDeletion].map((path) => deleteClassroomImageFromStorage(path, accessToken)));
+  saveButton.disabled = false;
+  saveButton.textContent = "게시글 저장";
   clearClassroomPostForm();
   renderClassrooms();
   renderStudentClassroomView();
@@ -2888,16 +3060,20 @@ function editClassroomPost(roomId, postId) {
   $("#postContentInput").value = post.content || "";
   $("#classroomPostLessonDateInput").value = post.lessonDate || today();
   renderYoutubeLinkRows(normalizeYoutubeLinks(post.links, post.link));
+  resetClassroomImageEditor(post.images);
 }
 
-function deleteClassroomPost(roomId, postId) {
+async function deleteClassroomPost(roomId, postId) {
   const room = state.classrooms.find((item) => item.id === roomId);
   const post = room?.posts.find((item) => item.id === postId);
   if (!room || !post || !confirm(`${post.title} 게시글을 삭제할까요?`)) return;
   room.posts = room.posts.filter((item) => item.id !== postId);
   room.updatedAt = Date.now();
   state.classrooms = state.classrooms.map((item) => (item.id === room.id ? room : item));
-  saveState();
+  saveState({ localOnly: true });
+  await saveStateToServer();
+  const accessToken = await getOfficeAccessToken();
+  await Promise.all(normalizeClassroomImages(post.images).map((image) => deleteClassroomImageFromStorage(image.path, accessToken)));
   renderClassrooms();
   renderStudentClassroomView();
 }
@@ -2908,6 +3084,7 @@ function renderAdminClassroomPosts() {
   $("#adminClassroomPosts").innerHTML = room?.posts.length
     ? [...room.posts].sort((a, b) => b.createdAt - a.createdAt).map((post) => renderClassroomPostCard(room.id, post, true)).join("")
     : `<div class="empty-state">선택한 수업방에 게시글이 없습니다.</div>`;
+  hydrateClassroomImages($("#adminClassroomPosts"), "./api/classroom-images");
 }
 
 function renderClassroomPostCard(roomId, post, editable = false) {
@@ -2926,6 +3103,12 @@ function renderClassroomPostCard(roomId, post, editable = false) {
           .join("")}
       </div>`
     : "";
+  const images = normalizeClassroomImages(post.images);
+  const imageList = images.length
+    ? `<div class="classroom-image-gallery">
+        ${images.map((image) => `<div class="classroom-image-placeholder" data-classroom-image-path="${image.path}">이미지 불러오는 중</div>`).join("")}
+      </div>`
+    : "";
   return `
     <article class="classroom-post-card">
       <div class="post-head">
@@ -2934,6 +3117,7 @@ function renderClassroomPostCard(roomId, post, editable = false) {
       </div>
       <strong>${post.title}</strong>
       <p>${post.content || "내용 없음"}</p>
+      ${imageList}
       ${linkList}
       ${
         editable
@@ -3039,6 +3223,7 @@ function renderStudentClassroomPosts() {
   $("#studentPostList").innerHTML = posts.length
     ? posts.sort((a, b) => b.createdAt - a.createdAt).map((post) => renderClassroomPostCard(room.id, post, false)).join("")
     : `<div class="empty-state">확인할 게시글이 없습니다.</div>`;
+  hydrateClassroomImages($("#studentPostList"), "./api/classroom-images");
 }
 
 function buildOnlineClassroomData(sourceState = state) {
@@ -3076,6 +3261,7 @@ function buildOnlineStudentFiles(sourceState = state) {
             title: post.title,
             content: post.content || "",
             links: normalizeYoutubeLinks(post.links, post.link),
+            images: normalizeClassroomImages(post.images),
             openToAll: Boolean(post.openToAll),
             lessonDate: post.lessonDate || "",
             createdAt: post.createdAt,

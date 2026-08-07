@@ -5,6 +5,7 @@ let currentStudentName = "";
 let currentStudentCode = "";
 let currentStudentData = null;
 let currentRoomId = "";
+const classroomImageApi = "https://grovescience-office-admin.vercel.app/api/classroom-images";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -222,6 +223,35 @@ function renderPosts() {
   $("#postList").innerHTML = room?.posts?.length
     ? [...room.posts].sort((a, b) => b.createdAt - a.createdAt).map(renderPost).join("")
     : `<div class="empty">확인할 게시글이 없습니다.</div>`;
+  hydratePostImages();
+}
+
+function normalizePostImages(images = []) {
+  return Array.isArray(images) ? images.filter((image) => String(image?.path || "").startsWith("classroom/")) : [];
+}
+
+async function hydratePostImages() {
+  const targets = Array.from(document.querySelectorAll("[data-classroom-image-path]"));
+  if (!targets.length) return;
+  const { data } = await supabaseClient.auth.getSession();
+  const accessToken = data.session?.access_token || "";
+  if (!accessToken) return;
+  await Promise.all(targets.map(async (target) => {
+    try {
+      const response = await fetch(`${classroomImageApi}?path=${encodeURIComponent(target.dataset.classroomImagePath)}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const result = await response.json();
+      if (!response.ok || !result.url) throw new Error();
+      const image = document.createElement("img");
+      image.src = result.url;
+      image.alt = "수업 이미지";
+      image.loading = "lazy";
+      target.replaceWith(image);
+    } catch (error) {
+      target.textContent = "이미지를 불러오지 못했습니다.";
+    }
+  }));
 }
 
 function renderPost(post) {
@@ -240,6 +270,12 @@ function renderPost(post) {
           .join("")}
       </div>`
     : "";
+  const images = normalizePostImages(post.images);
+  const imageList = images.length
+    ? `<div class="classroom-image-gallery">
+        ${images.map((image) => `<div class="classroom-image-placeholder" data-classroom-image-path="${image.path}">이미지 불러오는 중</div>`).join("")}
+      </div>`
+    : "";
   return `
     <article class="post-card">
       <div class="post-head">
@@ -248,6 +284,7 @@ function renderPost(post) {
       </div>
       <strong>${post.title}</strong>
       <p>${post.content || ""}</p>
+      ${imageList}
       ${linkList}
     </article>
   `;

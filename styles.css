@@ -1045,6 +1045,86 @@ td {
   gap: 10px;
 }
 
+.classroom-images-editor {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fbfcf8;
+}
+
+.field-help {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.image-upload-button {
+  cursor: pointer;
+}
+
+.classroom-image-list,
+.classroom-image-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.classroom-image-item {
+  position: relative;
+  min-height: 120px;
+  margin: 0;
+}
+
+.classroom-image-item img,
+.classroom-image-gallery img,
+.classroom-image-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 120px;
+  max-height: 320px;
+  display: block;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #eef4ea;
+}
+
+.classroom-image-placeholder {
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.image-remove-button {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(31, 35, 32, 0.82);
+  color: #fff;
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.empty-image-state {
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
 .youtube-link-list {
   display: grid;
   gap: 8px;
