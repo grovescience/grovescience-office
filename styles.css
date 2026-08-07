@@ -1050,6 +1050,17 @@ td {
   color: var(--ink);
 }
 
+.credential-status-select {
+  min-height: 42px;
+  padding: 0 34px 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+}
+
 .classroom-form,
 .classroom-post-form {
   align-items: end;

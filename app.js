@@ -1616,7 +1616,7 @@ function csvValue(value) {
   return `"${safe.replace(/"/g, '""')}"`;
 }
 
-function downloadStudentCredentials(rows) {
+function downloadStudentCredentials(rows, fileLabel = "발급명단") {
   const headers = ["학생 이름", "학년", "수강반", "로그인 아이디", "임시 비밀번호", "수업방 코드", "학생용 주소", "발급 결과"];
   const sortedRows = [...rows].sort((left, right) =>
     String(left.loginId || "").localeCompare(String(right.loginId || ""), "en", { sensitivity: "base" }),
@@ -1628,7 +1628,7 @@ function downloadStudentCredentials(rows) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `과수원과학-학생로그인-발급명단-${today()}.csv`;
+  link.download = `과수원과학-학생로그인-${fileLabel}-${today()}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -1646,10 +1646,13 @@ function savedStudentCredentialRows(students = state.students) {
 }
 
 function downloadSavedStudentCredentials() {
-  const rows = savedStudentCredentialRows();
-  if (!rows.length) return alert("발급된 학생 계정이 없습니다.");
-  downloadStudentCredentials(rows);
-  alert("학생 아이디·임시비밀번호 명단을 내려받았습니다.\n\n비밀번호가 비어 있는 학생은 ‘비밀번호 없는 학생 일괄 재설정’을 먼저 눌러주세요.");
+  const status = $("#studentCredentialsStatusFilter")?.value || "재원";
+  const targetStudents = status === "전체" ? state.students : state.students.filter((student) => student.status === status);
+  const rows = savedStudentCredentialRows(targetStudents);
+  if (!rows.length) return alert(`${status === "전체" ? "전체" : `${status}생`} 중 발급된 학생 계정이 없습니다.`);
+  const label = status === "전체" ? "전체학생명단" : `${status}생명단`;
+  downloadStudentCredentials(rows, label);
+  alert(`${status === "전체" ? "전체 학생" : `${status}생`} 아이디·임시비밀번호 명단 ${rows.length}명을 내려받았습니다.\n\n비밀번호가 비어 있는 학생은 ‘비밀번호 없는 학생 일괄 재설정’을 먼저 눌러주세요.`);
 }
 
 function parseCsvRows(text) {
