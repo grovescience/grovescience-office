@@ -98,6 +98,7 @@ button {
   padding: 28px 20px;
   background: #fbfaf6;
   border-right: 1px solid var(--line);
+  overflow-y: auto;
 }
 
 .brand {
@@ -150,7 +151,7 @@ button {
 
 .nav {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .nav-item {
@@ -163,10 +164,87 @@ button {
   text-align: left;
 }
 
-.nav-item.active,
-.nav-item:hover {
+.nav-main-item.active,
+.nav-main-item:hover {
   background: var(--green);
   color: #fff;
+}
+
+.nav-group {
+  border-radius: 8px;
+}
+
+.nav-group summary,
+.admin-tools summary {
+  position: relative;
+  padding: 11px 32px 11px 14px;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+
+.nav-group summary::-webkit-details-marker,
+.admin-tools summary::-webkit-details-marker {
+  display: none;
+}
+
+.nav-group summary::after,
+.admin-tools summary::after {
+  content: "⌄";
+  position: absolute;
+  top: 9px;
+  right: 13px;
+  color: var(--muted);
+  transition: transform .18s ease;
+}
+
+.nav-group[open] summary::after,
+.admin-tools[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.nav-group summary:hover,
+.nav-group.has-active summary {
+  background: #eef4e9;
+  color: var(--green);
+}
+
+.nav-submenu {
+  display: grid;
+  gap: 2px;
+  padding: 3px 0 5px 12px;
+}
+
+.nav-submenu .nav-item {
+  position: relative;
+  padding: 9px 12px 9px 22px;
+  font-size: 14px;
+}
+
+.nav-submenu .nav-item::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #aab5a6;
+  transform: translateY(-50%);
+}
+
+.nav-submenu .nav-item:hover,
+.nav-submenu .nav-item.active {
+  background: #eef4e9;
+  color: var(--green);
+  font-weight: 800;
+}
+
+.nav-submenu .nav-item.active::before {
+  background: var(--green);
 }
 
 .sidebar-note {
@@ -175,6 +253,32 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
+}
+
+.admin-tools {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.admin-tools summary {
+  color: var(--muted);
+}
+
+.admin-tools-content {
+  display: grid;
+  gap: 7px;
+  padding: 0 10px 10px;
+}
+
+.admin-tools-content .ghost-button,
+.admin-tools-content .credential-status-select {
+  justify-content: center;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  background: #fbfaf6;
+  font-size: 12px;
 }
 
 .backup-box {
@@ -1703,7 +1807,7 @@ dialog::backdrop {
   }
 
   .nav {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .stats-grid,

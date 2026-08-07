@@ -726,7 +726,15 @@ function setup() {
 function bindEvents() {
   $("#brandDashboardBtn").addEventListener("click", () => navigateToView("dashboard"));
   $$(".nav-item").forEach((button) => {
-    button.addEventListener("click", () => switchView(button.dataset.view, button.textContent));
+    button.addEventListener("click", () => switchView(button.dataset.view, button.textContent.trim()));
+  });
+  $$(".nav-group").forEach((group) => {
+    group.addEventListener("toggle", () => {
+      if (!group.open) return;
+      $$(".nav-group").forEach((other) => {
+        if (other !== group) other.open = false;
+      });
+    });
   });
 
   $$("[data-open-student]").forEach((button) => {
@@ -831,8 +839,17 @@ function bindEvents() {
 
 function switchView(viewId, label) {
   $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === viewId));
+  $$(".nav-group").forEach((group) => group.classList.remove("has-active"));
+  const activeItem = $(`.nav-item[data-view="${viewId}"]`);
+  const activeGroup = activeItem?.closest(".nav-group");
+  if (activeGroup) {
+    activeGroup.open = true;
+    activeGroup.classList.add("has-active");
+  } else {
+    $$(".nav-group").forEach((group) => { group.open = false; });
+  }
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === viewId));
-  $("#pageTitle").textContent = label;
+  $("#pageTitle").textContent = String(label || "").trim();
 }
 
 function navigateToView(viewId) {
