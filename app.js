@@ -1564,7 +1564,10 @@ function csvValue(value) {
 
 function downloadStudentCredentials(rows) {
   const headers = ["학생 이름", "학년", "수강반", "로그인 아이디", "임시 비밀번호", "수업방 코드", "학생용 주소", "발급 결과"];
-  const csv = [headers, ...rows.map((row) => [row.name, row.grade, row.className, row.loginId, row.password, row.classroomCode, "https://grovescience-classroom.vercel.app/", row.status])]
+  const sortedRows = [...rows].sort((left, right) =>
+    String(left.loginId || "").localeCompare(String(right.loginId || ""), "en", { numeric: true, sensitivity: "base" }),
+  );
+  const csv = [headers, ...sortedRows.map((row) => [row.name, row.grade, row.className, row.loginId, row.password, row.classroomCode, "https://grovescience-classroom.vercel.app/", row.status])]
     .map((row) => row.map(csvValue).join(","))
     .join("\r\n");
   const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
