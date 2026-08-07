@@ -3101,6 +3101,7 @@ function openClassroomPosts(roomId) {
   const room = state.classrooms.find((item) => item.id === roomId);
   if (!room) return;
   $("#postClassroomSelect").value = room.id;
+  $$(".classroom-card").forEach((card) => card.classList.toggle("selected", card.dataset.roomId === room.id));
   renderAdminClassroomPosts();
   $("#adminClassroomPosts")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -3115,9 +3116,9 @@ function renderClassroomList() {
             .filter(Boolean)
             .join(", ");
           return `
-            <article class="classroom-card">
+            <article class="classroom-card" data-room-id="${room.id}">
               <div>
-                <button class="link-name-button" type="button" onclick="editClassroom('${room.id}')">${room.name}</button>
+                <button class="link-name-button" type="button" onclick="openClassroomPosts('${room.id}')">${room.name}</button>
                 <p>${room.description || "설명 없음"}</p>
                 <div class="classroom-meta-row">
                   <span class="visibility-pill ${isClassroomPublic(room) ? "public" : ""}">${isClassroomPublic(room) ? "학생용 공개" : "비공개"}</span>
@@ -3126,9 +3127,8 @@ function renderClassroomList() {
                 <em>${memberNames || "연결된 학생 없음"}</em>
               </div>
               <div class="row-actions">
-                <button class="mini-button" type="button" onclick="openClassroomPosts('${room.id}')">게시글</button>
                 <button class="mini-button" type="button" onclick="openClassroomStudentList('${room.id}')">학생 명단</button>
-                <button class="mini-button" type="button" onclick="editClassroom('${room.id}')">수정</button>
+                <button class="mini-button" type="button" onclick="editClassroom('${room.id}')">수업방 수정</button>
                 <button class="mini-button danger" type="button" onclick="deleteClassroom('${room.id}')">삭제</button>
               </div>
             </article>
@@ -3139,11 +3139,15 @@ function renderClassroomList() {
 }
 
 function renderPostClassroomOptions() {
+  const selectedRoomId = $("#postClassroomSelect")?.value || "";
   $("#postClassroomSelect").innerHTML = state.classrooms.length
     ? sortClassroomsByName(state.classrooms)
         .map((room) => `<option value="${room.id}">${room.name}${isClassroomPublic(room) ? "" : " (비공개)"}</option>`)
         .join("")
     : `<option value="">수업방 없음</option>`;
+  if (selectedRoomId && state.classrooms.some((room) => room.id === selectedRoomId)) {
+    $("#postClassroomSelect").value = selectedRoomId;
+  }
 }
 
 function clearClassroomPostForm() {
