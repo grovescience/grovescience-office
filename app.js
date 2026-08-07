@@ -1545,6 +1545,17 @@ function makeUniqueLoginId(student, index, usedIds) {
   return candidate;
 }
 
+function makeFallbackLoginId(usedIds) {
+  let candidate = "";
+  do {
+    const values = new Uint32Array(1);
+    crypto.getRandomValues(values);
+    candidate = `orchard26${String(values[0] % 100000).padStart(5, "0")}`;
+  } while (usedIds.has(candidate));
+  usedIds.add(candidate);
+  return candidate;
+}
+
 function csvValue(value) {
   const text = String(value ?? "");
   const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
@@ -1658,12 +1669,18 @@ async function provisionUnissuedStudentAccounts() {
       const account = accounts[index];
       button.textContent = `계정 발급 중 ${index + 1}/${accounts.length}`;
       try {
-        const response = await fetch("./api/student-accounts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-          body: JSON.stringify({ studentId: account.student.id, loginId: account.loginId, password: account.password }),
-        });
-        const result = await response.json().catch(() => ({}));
+        let response;
+        let result = {};
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          response = await fetch("./api/student-accounts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+            body: JSON.stringify({ studentId: account.student.id, loginId: account.loginId, password: account.password }),
+          });
+          result = await response.json().catch(() => ({}));
+          if (response.ok || ![400, 409].includes(response.status)) break;
+          account.loginId = makeFallbackLoginId(usedIds);
+        }
         if (response.ok) {
           state.students = state.students.map((student) =>
             student.id === account.student.id ? { ...student, loginId: account.loginId, temporaryPassword: account.password } : student,
