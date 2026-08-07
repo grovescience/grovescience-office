@@ -3644,16 +3644,19 @@ async function exportOnlineClassroom() {
 
 function fillClassDefaults() {
   const classInfo = getClassInfo($("#classInput").value);
-  if (!classInfo) return;
-  $("#subjectInput").value = classInfo.subject;
-  $("#bookInput").value = classInfo.defaultBook;
-  $("#tuitionInput").value = classInfo.tuition;
+  if (!classInfo) {
+    $("#bookInput").value = "";
+    return;
+  }
+  $("#subjectInput").value = classInfo.subject || "";
+  $("#bookInput").value = classInfo.defaultBook || "";
+  $("#tuitionInput").value = classInfo.tuition || "";
 }
 
 function openStudentDialog(studentId = "") {
   renderSchoolOptions();
   const student = state.students.find((item) => item.id === studentId);
-  const classInfo = getClassInfo(student?.className || classes[0].name);
+  const classInfo = student?.className ? getClassInfo(student.className) : null;
   $("#classInput").innerHTML = regularClassOptions();
   const inheritedSpecials = [...new Set([...(student?.specialClassNames || []), ...(student?.className && isSpecialClassName(student.className) ? [student.className] : [])])];
   renderSpecialClassChecks(inheritedSpecials);
