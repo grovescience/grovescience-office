@@ -3683,6 +3683,26 @@ function syncStudentStatusDates() {
   }
 }
 
+function isSpecialClassroomForStudent(room, student) {
+  if (isSpecialClassName(room?.name)) return true;
+  return (student?.specialClassNames || []).some((className) =>
+    room?.name === className || String(room?.name || "").includes(className) || className.includes(String(room?.name || "")),
+  );
+}
+
+function removeStudentFromRegularClassrooms(student) {
+  if (!student?.id) return 0;
+  let removedCount = 0;
+  state.classrooms = (state.classrooms || []).map((room) => {
+    if (!(room.memberStudentIds || []).includes(student.id) || isSpecialClassroomForStudent(room, student)) return room;
+    const memberAccess = { ...(room.memberAccess || {}) };
+    delete memberAccess[student.id];
+    removedCount += 1;
+    return { ...room, memberStudentIds: room.memberStudentIds.filter((id) => id !== student.id), memberAccess, updatedAt: Date.now() };
+  });
+  return removedCount;
+}
+
 async function saveStudentFromForm() {
   const id = $("#studentId").value || crypto.randomUUID();
   const existing = state.students.find((student) => student.id === id);
@@ -3723,6 +3743,10 @@ async function saveStudentFromForm() {
     state.students.push(student);
   }
 
+  if (selectedStudentStatus === "퇴원" && existing?.status !== "퇴원") {
+    removeStudentFromRegularClassrooms(student);
+  }
+
   saveState();
   const temporaryPassword = $("#studentTempPasswordInput").value;
   if (student.loginId && temporaryPassword) {
@@ -3751,8 +3775,10 @@ async function saveStudentFromForm() {
 
 function retireStudent(studentId) {
   const student = state.students.find((item) => item.id === studentId);
-  if (!student || !confirm(`${student.name} 학생을 퇴원생 명단으로 옮길까요?\n\n출석·납부·상담 기록은 그대로 유지됩니다.`)) return;
-  state.students = state.students.map((item) => item.id === studentId ? { ...item, status: "퇴원", withdrawalDate: today(), retiredAt: Date.now(), retiredReason: "개별 퇴원 처리" } : item);
+  if (!student || !confirm(`${student.name} 학생을 퇴원생 명단으로 옮길까요?\n\n정규반 수업방에서는 즉시 제외되고, 특강반 수업방 이용권한은 유지됩니다.\n출석·납부·상담 기록도 그대로 유지됩니다.`)) return;
+  const retiredStudent = { ...student, status: "퇴원", withdrawalDate: today(), retiredAt: Date.now(), retiredReason: "개별 퇴원 처리" };
+  state.students = state.students.map((item) => item.id === studentId ? retiredStudent : item);
+  removeStudentFromRegularClassrooms(retiredStudent);
   saveState();
   renderAll();
 }
