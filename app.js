@@ -771,7 +771,7 @@ function bindEvents() {
   $("#studentRoomLoginBtn").addEventListener("click", loginStudentRoom);
   $("#studentRoomLogoutBtn").addEventListener("click", logoutStudentRoom);
   $("#exportOnlineClassroomBtn").addEventListener("click", exportOnlineClassroom);
-  $("#bulkStudentAccountsBtn").addEventListener("click", provisionAllStudentAccounts);
+  $("#bulkStudentAccountsBtn").addEventListener("click", provisionUnissuedStudentAccounts);
   $("#scoreExamType").addEventListener("change", () => { syncScoreExamForm(); renderScoreStudentInputs(); });
   $("#scoreExamClass").addEventListener("change", () => renderScoreStudentInputs());
   $("#scoreExamTotalQuestions").addEventListener("input", updateAcademyScorePreviews);
@@ -1563,10 +1563,12 @@ function downloadStudentCredentials(rows) {
   URL.revokeObjectURL(url);
 }
 
-async function provisionAllStudentAccounts() {
-  const targets = sortStudentsByGradeName(state.students.filter((student) => student.status !== "퇴원"));
-  if (!targets.length) return alert("계정을 발급할 재원·휴원 학생이 없습니다.");
-  if (!confirm(`재원·휴원 학생 ${targets.length}명의 로그인 아이디와 임시 비밀번호를 자동 발급할까요?\n\n이미 발급된 학생도 비밀번호가 새로 변경되며, 전달용 CSV 파일이 한 번 다운로드됩니다.`)) return;
+async function provisionUnissuedStudentAccounts() {
+  const targets = sortStudentsByGradeName(
+    state.students.filter((student) => student.status !== "퇴원" && !String(student.loginId || "").trim()),
+  );
+  if (!targets.length) return alert("현재 미발급 학생이 없습니다. 기존 학생의 아이디와 비밀번호는 변경되지 않았습니다.");
+  if (!confirm(`아이디가 없는 학생 ${targets.length}명에게만 로그인 아이디와 임시 비밀번호를 발급할까요?\n\n이미 발급된 학생의 아이디와 비밀번호는 절대 변경하지 않습니다. 신규 발급 학생만 담긴 전달용 CSV 파일이 다운로드됩니다.`)) return;
   const { data } = await window.officeAuthClient?.auth?.getSession?.() || { data: {} };
   const accessToken = data?.session?.access_token || "";
   if (!accessToken) return alert("온라인 관리자 로그인이 필요합니다.");
@@ -1584,42 +1586,57 @@ async function provisionAllStudentAccounts() {
     loginId: makeUniqueLoginId(student, index, usedIds),
     password: generateTemporaryPassword(),
   }));
-  state.students = state.students.map((student) => {
-    const account = accounts.find((item) => item.student.id === student.id);
-    return account ? { ...student, loginId: account.loginId } : student;
-  });
   ensureStudentClassroomCodes();
-  saveState();
+  saveState({ localOnly: true });
   const results = [];
   try {
     for (let index = 0; index < accounts.length; index += 1) {
       const account = accounts[index];
       button.textContent = `계정 발급 중 ${index + 1}/${accounts.length}`;
-      const response = await fetch("./api/student-accounts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ studentId: account.student.id, loginId: account.loginId, password: account.password }),
-      });
-      const result = await response.json().catch(() => ({}));
-      const current = state.students.find((student) => student.id === account.student.id) || account.student;
-      results.push({
-        name: current.name,
-        grade: current.grade,
-        className: getStudentClassNames(current).join(", "),
-        loginId: account.loginId,
-        password: response.ok ? account.password : "",
-        classroomCode: current.classroomCode || "",
-        status: response.ok ? "발급 완료" : `실패: ${result.error || response.status}`,
-      });
+      try {
+        const response = await fetch("./api/student-accounts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ studentId: account.student.id, loginId: account.loginId, password: account.password }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (response.ok) {
+          state.students = state.students.map((student) =>
+            student.id === account.student.id ? { ...student, loginId: account.loginId } : student,
+          );
+        }
+        const current = state.students.find((student) => student.id === account.student.id) || account.student;
+        results.push({
+          name: current.name,
+          grade: current.grade,
+          className: getStudentClassNames(current).join(", "),
+          loginId: account.loginId,
+          password: response.ok ? account.password : "",
+          classroomCode: current.classroomCode || "",
+          status: response.ok ? "발급 완료" : `실패: ${result.error || response.status}`,
+        });
+      } catch (error) {
+        const current = state.students.find((student) => student.id === account.student.id) || account.student;
+        results.push({
+          name: current.name,
+          grade: current.grade,
+          className: getStudentClassNames(current).join(", "),
+          loginId: account.loginId,
+          password: "",
+          classroomCode: current.classroomCode || "",
+          status: `실패: ${error.message || "네트워크 연결 오류"}`,
+        });
+      }
     }
-    await saveStateToServer();
+    saveState({ localOnly: true });
+    const onlineSaved = await saveStateToServer();
     downloadStudentCredentials(results);
     renderStudents();
     const successCount = results.filter((row) => row.status === "발급 완료").length;
-    alert(`학생 계정 일괄 발급이 끝났습니다.\n성공 ${successCount}명 · 실패 ${results.length - successCount}명\n\n다운로드된 발급명단 파일은 개인정보이므로 안전하게 보관해주세요.`);
+    alert(`미발급 학생 계정 발급이 끝났습니다.\n성공 ${successCount}명 · 실패 ${results.length - successCount}명\n기존 계정 변경 0명${onlineSaved ? "" : "\n\n온라인 명단 저장에 실패했습니다. 화면의 자료 백업을 먼저 눌러 보관한 뒤 다시 시도해주세요."}\n\n다운로드된 신규 발급명단 파일은 개인정보이므로 안전하게 보관해주세요.`);
   } finally {
     button.disabled = false;
-    button.textContent = "학생 아이디 일괄 발급";
+    button.textContent = "미발급 학생만 일괄 발급";
   }
 }
 
