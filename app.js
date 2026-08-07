@@ -774,6 +774,7 @@ function bindEvents() {
   $("#bulkStudentAccountsBtn").addEventListener("click", provisionUnissuedStudentAccounts);
   $("#resetMissingStudentPasswordsBtn").addEventListener("click", resetMissingStudentPasswords);
   $("#downloadStudentCredentialsBtn").addEventListener("click", downloadSavedStudentCredentials);
+  $("#importStudentCredentialsInput").addEventListener("change", importStudentCredentials);
   $("#scoreExamType").addEventListener("change", () => { syncScoreExamForm(); renderScoreStudentInputs(); });
   $("#scoreExamClass").addEventListener("change", () => renderScoreStudentInputs());
   $("#scoreExamTotalQuestions").addEventListener("input", updateAcademyScorePreviews);
@@ -1565,7 +1566,7 @@ function csvValue(value) {
 function downloadStudentCredentials(rows) {
   const headers = ["학생 이름", "학년", "수강반", "로그인 아이디", "임시 비밀번호", "수업방 코드", "학생용 주소", "발급 결과"];
   const sortedRows = [...rows].sort((left, right) =>
-    String(left.loginId || "").localeCompare(String(right.loginId || ""), "en", { numeric: true, sensitivity: "base" }),
+    String(left.loginId || "").localeCompare(String(right.loginId || ""), "en", { sensitivity: "base" }),
   );
   const csv = [headers, ...sortedRows.map((row) => [row.name, row.grade, row.className, row.loginId, row.password, row.classroomCode, "https://grovescience-classroom.vercel.app/", row.status])]
     .map((row) => row.map(csvValue).join(","))
@@ -1596,6 +1597,101 @@ function downloadSavedStudentCredentials() {
   if (!rows.length) return alert("발급된 학생 계정이 없습니다.");
   downloadStudentCredentials(rows);
   alert("학생 아이디·임시비밀번호 명단을 내려받았습니다.\n\n비밀번호가 비어 있는 학생은 ‘비밀번호 없는 학생 일괄 재설정’을 먼저 눌러주세요.");
+}
+
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let value = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (quoted) {
+      if (character === '"' && text[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else if (character === '"') {
+        quoted = false;
+      } else {
+        value += character;
+      }
+    } else if (character === '"') {
+      quoted = true;
+    } else if (character === ",") {
+      row.push(value);
+      value = "";
+    } else if (character === "\n") {
+      row.push(value.replace(/\r$/, ""));
+      if (row.some((cell) => cell !== "")) rows.push(row);
+      row = [];
+      value = "";
+    } else {
+      value += character;
+    }
+  }
+  row.push(value.replace(/\r$/, ""));
+  if (row.some((cell) => cell !== "")) rows.push(row);
+  return rows;
+}
+
+async function importStudentCredentials(event) {
+  const input = event.target;
+  const file = input.files?.[0];
+  if (!file) return;
+  try {
+    const rows = parseCsvRows(await file.text());
+    const headers = (rows.shift() || []).map((header) => header.replace(/^\ufeff/, "").trim());
+    const records = rows.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
+    const usable = records.filter((record) => record["학생 이름"] && record["로그인 아이디"] && record["임시 비밀번호"]);
+    if (!usable.length) throw new Error("학생 이름·로그인 아이디·임시 비밀번호가 들어 있는 행을 찾지 못했습니다.");
+    if (!confirm(`${usable.length}명의 아이디와 임시비밀번호를 관리자 명단에 복구할까요?\n\n‘재발급 필요’로 표시된 학생만 실제 계정을 새로 처리하고, 나머지는 기존 비밀번호를 변경하지 않습니다.`)) return;
+
+    const { data } = await window.officeAuthClient?.auth?.getSession?.() || { data: {} };
+    const accessToken = data?.session?.access_token || "";
+    const failures = [];
+    let restored = 0;
+    let reprovisioned = 0;
+    for (const record of usable) {
+      const loginId = String(record["로그인 아이디"] || "").trim().toLowerCase();
+      const name = String(record["학생 이름"] || "").trim();
+      const password = String(record["임시 비밀번호"] || "");
+      const byLoginId = state.students.find((student) => String(student.loginId || "").toLowerCase() === loginId);
+      const byName = state.students.filter((student) => String(student.name || "").trim() === name);
+      const student = byLoginId || (byName.length === 1 ? byName[0] : null);
+      if (!student) {
+        failures.push(`${name}: 학생을 정확히 찾지 못함`);
+        continue;
+      }
+      const needsProvision = String(record["발급 결과"] || "").includes("재발급 필요");
+      if (needsProvision) {
+        if (!accessToken) {
+          failures.push(`${name}: 관리자 로그인 필요`);
+          continue;
+        }
+        const response = await fetch("./api/student-accounts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ studentId: student.id, loginId, password }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          failures.push(`${name}: ${result.error || response.status}`);
+          continue;
+        }
+        reprovisioned += 1;
+      }
+      state.students = state.students.map((item) => item.id === student.id ? { ...item, loginId, temporaryPassword: password } : item);
+      restored += 1;
+    }
+    saveState({ localOnly: true });
+    const onlineSaved = await saveStateToServer();
+    renderStudents();
+    alert(`학생 로그인 정보 복구가 끝났습니다.\n복구 ${restored}명 · 이 중 계정 재발급 ${reprovisioned}명 · 실패 ${failures.length}명${onlineSaved ? "" : "\n온라인 저장 실패"}${failures.length ? `\n\n${failures.slice(0, 5).join("\n")}` : ""}\n\n이제 학생정보와 ‘학생 아이디·비밀번호 명단 받기’에서 확인할 수 있습니다.`);
+  } catch (error) {
+    alert(`CSV 복구에 실패했습니다.\n${error.message}`);
+  } finally {
+    input.value = "";
+  }
 }
 
 async function resetMissingStudentPasswords() {
