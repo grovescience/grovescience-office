@@ -3404,6 +3404,18 @@ function getStudentRoomCode(student) {
 function loginStudentRoom() {
   const student = state.students.find((item) => item.id === $("#studentRoomLoginSelect").value);
   if (!student) return;
+  const rooms = getAdminPreviewClassrooms(student.id);
+  if (!rooms.length) {
+    currentStudentRoomStudentId = "";
+    currentStudentRoomId = "";
+    localStorage.removeItem("orchardScienceClassroomStudentId");
+    $("#studentRoomArea").hidden = true;
+    $("#studentRoomLogin").hidden = false;
+    $("#studentRoomLoginMessage").hidden = false;
+    $("#studentRoomLoginMessage").innerHTML = `<strong>${student.name} 학생은 연결된 수업방이 없습니다.</strong><span>수업방 관리 → 해당 수업방 → 학생 명단에서 학생을 추가해주세요.</span>`;
+    return;
+  }
+  $("#studentRoomLoginMessage").hidden = true;
   currentStudentRoomStudentId = student.id;
   currentStudentRoomId = "";
   localStorage.setItem("orchardScienceClassroomStudentId", student.id);
@@ -3415,6 +3427,7 @@ function logoutStudentRoom() {
   currentStudentRoomId = "";
   localStorage.removeItem("orchardScienceClassroomStudentId");
   $("#studentRoomCodeInput").value = "";
+  $("#studentRoomLoginMessage").hidden = true;
   renderStudentClassroomView();
 }
 
