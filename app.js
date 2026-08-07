@@ -728,14 +728,6 @@ function bindEvents() {
   $$(".nav-item").forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view, button.textContent.trim()));
   });
-  $$(".nav-group").forEach((group) => {
-    group.addEventListener("toggle", () => {
-      if (!group.open) return;
-      $$(".nav-group").forEach((other) => {
-        if (other !== group) other.open = false;
-      });
-    });
-  });
 
   $$("[data-open-student]").forEach((button) => {
     button.addEventListener("click", () => openStudentDialog());
@@ -845,8 +837,6 @@ function switchView(viewId, label) {
   if (activeGroup) {
     activeGroup.open = true;
     activeGroup.classList.add("has-active");
-  } else {
-    $$(".nav-group").forEach((group) => { group.open = false; });
   }
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === viewId));
   $("#pageTitle").textContent = String(label || "").trim();
