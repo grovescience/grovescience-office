@@ -772,6 +772,8 @@ function bindEvents() {
   $("#studentRoomLogoutBtn").addEventListener("click", logoutStudentRoom);
   $("#exportOnlineClassroomBtn").addEventListener("click", exportOnlineClassroom);
   $("#bulkStudentAccountsBtn").addEventListener("click", provisionUnissuedStudentAccounts);
+  $("#resetMissingStudentPasswordsBtn").addEventListener("click", resetMissingStudentPasswords);
+  $("#downloadStudentCredentialsBtn").addEventListener("click", downloadSavedStudentCredentials);
   $("#scoreExamType").addEventListener("change", () => { syncScoreExamForm(); renderScoreStudentInputs(); });
   $("#scoreExamClass").addEventListener("change", () => renderScoreStudentInputs());
   $("#scoreExamTotalQuestions").addEventListener("input", updateAcademyScorePreviews);
@@ -1563,6 +1565,68 @@ function downloadStudentCredentials(rows) {
   URL.revokeObjectURL(url);
 }
 
+function savedStudentCredentialRows(students = state.students) {
+  return sortStudentsByGradeName(students.filter((student) => student.loginId)).map((student) => ({
+    name: student.name,
+    grade: student.grade,
+    className: getStudentClassNames(student).join(", "),
+    loginId: student.loginId,
+    password: student.temporaryPassword || "",
+    classroomCode: student.classroomCode || "",
+    status: student.temporaryPassword ? "확인 가능" : "비밀번호 재설정 필요",
+  }));
+}
+
+function downloadSavedStudentCredentials() {
+  const rows = savedStudentCredentialRows();
+  if (!rows.length) return alert("발급된 학생 계정이 없습니다.");
+  downloadStudentCredentials(rows);
+  alert("학생 아이디·임시비밀번호 명단을 내려받았습니다.\n\n비밀번호가 비어 있는 학생은 ‘비밀번호 없는 학생 일괄 재설정’을 먼저 눌러주세요.");
+}
+
+async function resetMissingStudentPasswords() {
+  const targets = sortStudentsByGradeName(
+    state.students.filter((student) => student.status !== "퇴원" && student.loginId && !student.temporaryPassword),
+  );
+  if (!targets.length) return alert("비밀번호를 다시 설정할 학생이 없습니다. 현재 발급정보를 명단으로 내려받을 수 있습니다.");
+  if (!confirm(`비밀번호를 확인할 수 없는 학생 ${targets.length}명의 임시비밀번호를 새로 설정할까요?\n\n해당 학생은 기존 비밀번호 대신 새 임시비밀번호로 로그인해야 합니다.`)) return;
+  const { data } = await window.officeAuthClient?.auth?.getSession?.() || { data: {} };
+  const accessToken = data?.session?.access_token || "";
+  if (!accessToken) return alert("온라인 관리자 로그인이 필요합니다.");
+  const button = $("#resetMissingStudentPasswordsBtn");
+  const results = [];
+  button.disabled = true;
+  try {
+    for (let index = 0; index < targets.length; index += 1) {
+      const student = targets[index];
+      const password = generateTemporaryPassword();
+      button.textContent = `비밀번호 설정 중 ${index + 1}/${targets.length}`;
+      try {
+        const response = await fetch("./api/student-accounts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ studentId: student.id, loginId: student.loginId, password }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || String(response.status));
+        state.students = state.students.map((item) => item.id === student.id ? { ...item, temporaryPassword: password } : item);
+        results.push({ ...savedStudentCredentialRows([student])[0], password, status: "재설정 완료" });
+      } catch (error) {
+        results.push({ ...savedStudentCredentialRows([student])[0], password: "", status: `실패: ${error.message}` });
+      }
+    }
+    saveState({ localOnly: true });
+    const onlineSaved = await saveStateToServer();
+    downloadStudentCredentials(results);
+    renderStudents();
+    const successCount = results.filter((row) => row.status === "재설정 완료").length;
+    alert(`임시비밀번호 설정이 끝났습니다.\n성공 ${successCount}명 · 실패 ${results.length - successCount}명${onlineSaved ? "" : "\n온라인 저장에 실패했으니 자료 백업을 먼저 해주세요."}\n\n방금 내려받은 명단에서 아이디와 비밀번호를 확인할 수 있습니다.`);
+  } finally {
+    button.disabled = false;
+    button.textContent = "비밀번호 없는 학생 일괄 재설정";
+  }
+}
+
 async function provisionUnissuedStudentAccounts() {
   const targets = sortStudentsByGradeName(
     state.students.filter((student) => student.status !== "퇴원" && !String(student.loginId || "").trim()),
@@ -1602,7 +1666,7 @@ async function provisionUnissuedStudentAccounts() {
         const result = await response.json().catch(() => ({}));
         if (response.ok) {
           state.students = state.students.map((student) =>
-            student.id === account.student.id ? { ...student, loginId: account.loginId } : student,
+            student.id === account.student.id ? { ...student, loginId: account.loginId, temporaryPassword: account.password } : student,
           );
         }
         const current = state.students.find((student) => student.id === account.student.id) || account.student;
@@ -3360,7 +3424,7 @@ function openStudentDialog(studentId = "") {
   $("#parentPhoneInput").value = student?.parentPhone || "";
   $("#classroomCodeInput").value = student?.classroomCode || "";
   $("#studentLoginIdInput").value = student?.loginId || "";
-  $("#studentTempPasswordInput").value = "";
+  $("#studentTempPasswordInput").value = student?.temporaryPassword || "";
   $("#subjectInput").value = student?.subject || classInfo?.subject || "";
   $("#bookInput").value = student?.book || classInfo?.defaultBook || "";
   $("#homeworkInput").value = student?.homework || "";
@@ -3399,6 +3463,7 @@ async function saveStudentFromForm() {
     parentPhone: $("#parentPhoneInput").value.trim(),
     classroomCode,
     loginId: $("#studentLoginIdInput").value.trim().toLowerCase(),
+    temporaryPassword: existing?.temporaryPassword || "",
     subject: $("#subjectInput").value.trim() || classInfo?.subject || "",
     book: $("#bookInput").value.trim() || classInfo?.defaultBook || "",
     homework: $("#homeworkInput").value.trim(),
@@ -3432,6 +3497,8 @@ async function saveStudentFromForm() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "학생 계정을 만들지 못했습니다.");
+      state.students = state.students.map((item) => item.id === student.id ? { ...item, temporaryPassword } : item);
+      saveState({ localOnly: true });
       await saveStateToServer();
       alert(`${student.name} 학생 계정을 만들었습니다.\n아이디: ${student.loginId}\n비밀번호는 학생에게 개별 전달해주세요.`);
     } catch (error) {

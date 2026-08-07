@@ -78,6 +78,8 @@
             <button class="ghost-button" id="exportDataBtn" data-export-data type="button">자료 백업</button>
             <button class="ghost-button" id="exportOnlineClassroomBtn" type="button">과수원ON 백업파일 만들기</button>
             <button class="ghost-button" id="bulkStudentAccountsBtn" type="button">미발급 학생만 일괄 발급</button>
+            <button class="ghost-button" id="resetMissingStudentPasswordsBtn" type="button">비밀번호 없는 학생 일괄 재설정</button>
+            <button class="ghost-button" id="downloadStudentCredentialsBtn" type="button">학생 아이디·비밀번호 명단 받기</button>
             <label class="ghost-button file-button">
               백업 파일 불러오기(기존 유지)
               <input id="importDataInput" class="import-data-input" type="file" accept="application/json" />
@@ -890,8 +892,8 @@
           </label>
           <label>
             임시 비밀번호
-            <input id="studentTempPasswordInput" type="password" minlength="10" autocomplete="new-password" placeholder="계정 발급·변경할 때만 입력" />
-            <small>10자 이상. 저장 후 화면이나 백업 파일에는 남지 않습니다.</small>
+            <input id="studentTempPasswordInput" type="text" minlength="10" autocomplete="off" placeholder="계정 발급·변경할 때만 입력" />
+            <small>관리자만 확인할 수 있습니다. 새 값을 입력하고 저장하면 학생 비밀번호도 변경됩니다.</small>
           </label>
           <label>
             과목
