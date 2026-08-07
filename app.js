@@ -44,6 +44,7 @@ let classroomMemberSelection = new Set();
 let classroomMemberAccess = {};
 let memberDialogStudents = [];
 let memberDialogRoomId = "";
+let currentClassPreviewRoomId = "";
 let classroomImageDraft = [];
 let pendingClassroomImageFiles = [];
 let classroomImagesMarkedForDeletion = new Set();
@@ -771,6 +772,8 @@ function bindEvents() {
   $("#postClassroomSelect").addEventListener("change", renderAdminClassroomPosts);
   $("#studentRoomLoginBtn").addEventListener("click", loginStudentRoom);
   $("#studentRoomLogoutBtn").addEventListener("click", logoutStudentRoom);
+  $("#classRoomPreviewBtn").addEventListener("click", renderClassRoomPreview);
+  $("#classRoomPreviewSelect").addEventListener("change", () => { currentClassPreviewRoomId = ""; renderClassRoomPreview(); });
   $("#exportOnlineClassroomBtn").addEventListener("click", exportOnlineClassroom);
   $("#bulkStudentAccountsBtn").addEventListener("click", provisionUnissuedStudentAccounts);
   $("#resetMissingStudentPasswordsBtn").addEventListener("click", resetMissingStudentPasswords);
@@ -2746,6 +2749,12 @@ function renderWaitlistCard(record, isDone = false) {
 function renderClassroomStudentOptions() {
   const options = sortStudentsByGradeName(state.students).map((student) => `<option value="${student.id}">${student.grade} · ${student.name} · ${getStudentClassNames(student).join(", ") || "반 미지정"}</option>`).join("");
   if ($("#studentRoomLoginSelect")) $("#studentRoomLoginSelect").innerHTML = options;
+  if ($("#classRoomPreviewSelect")) {
+    const selected = $("#classRoomPreviewSelect").value;
+    $("#classRoomPreviewSelect").innerHTML = classOptions();
+    if ([...$("#classRoomPreviewSelect").options].some((option) => option.value === selected)) $("#classRoomPreviewSelect").value = selected;
+    renderClassRoomPreview();
+  }
   renderClassroomGradeOptions();
   renderClassroomMemberChecks();
 }
@@ -3473,6 +3482,58 @@ function renderStudentClassroomPosts() {
   hydrateClassroomImages($("#studentPostList"), "./api/classroom-images");
 }
 
+function getClassRoomPreviewData() {
+  const className = $("#classRoomPreviewSelect")?.value || "";
+  const students = sortStudentsByGradeName(
+    state.students.filter((student) => student.status !== "퇴원" && studentBelongsToClass(student, className)),
+  );
+  const studentIds = new Set(students.map((student) => student.id));
+  const rooms = sortClassroomsByName(
+    state.classrooms.filter((room) => (room.memberStudentIds || []).some((studentId) => studentIds.has(studentId))),
+  );
+  return { className, students, studentIds, rooms };
+}
+
+function renderClassRoomPreview() {
+  if (!$("#classRoomPreviewSelect")) return;
+  const { className, students, studentIds, rooms } = getClassRoomPreviewData();
+  $("#classRoomPreviewSummary").innerHTML = className
+    ? `<strong>${className} · ${students.length}명</strong><span>${students.map((student) => student.name).join(", ") || "현재 소속 학생이 없습니다."}</span>`
+    : "반을 선택하면 연결 현황이 표시됩니다.";
+  $("#classRoomPreviewCount").textContent = `${rooms.length}개`;
+  if (!currentClassPreviewRoomId || !rooms.some((room) => room.id === currentClassPreviewRoomId)) currentClassPreviewRoomId = rooms[0]?.id || "";
+  $("#classRoomPreviewList").innerHTML = rooms.length
+    ? rooms.map((room) => {
+        const linkedCount = (room.memberStudentIds || []).filter((studentId) => studentIds.has(studentId)).length;
+        return `
+          <button class="${room.id === currentClassPreviewRoomId ? "active" : ""}" type="button" onclick="openClassRoomPreview('${room.id}')">
+            <strong>${room.name}</strong>
+            <span>${isClassroomPublic(room) ? "학생용 공개" : "비공개"} · ${linkedCount}/${students.length}명 연결 · ${(room.posts || []).length}개 게시글</span>
+          </button>
+        `;
+      }).join("")
+    : `<div class="empty-state">이 반 학생에게 연결된 수업방이 없습니다.</div>`;
+  renderClassRoomPreviewPosts();
+}
+
+function openClassRoomPreview(roomId) {
+  const { rooms } = getClassRoomPreviewData();
+  if (!rooms.some((room) => room.id === roomId)) return;
+  currentClassPreviewRoomId = roomId;
+  renderClassRoomPreview();
+}
+
+function renderClassRoomPreviewPosts() {
+  const { rooms } = getClassRoomPreviewData();
+  const room = rooms.find((item) => item.id === currentClassPreviewRoomId);
+  const posts = [...(room?.posts || [])].sort((left, right) => right.createdAt - left.createdAt);
+  $("#classRoomPreviewPostTitle").textContent = room ? room.name : "게시글";
+  $("#classRoomPreviewPosts").innerHTML = posts.length
+    ? posts.map((post) => renderClassroomPostCard(room.id, post, false)).join("")
+    : `<div class="empty-state">확인할 게시글이 없습니다.</div>`;
+  hydrateClassroomImages($("#classRoomPreviewPosts"), "./api/classroom-images");
+}
+
 function buildOnlineClassroomData(sourceState = state) {
   return {
     academyName: "과수원과학",
@@ -3785,6 +3846,7 @@ window.removeStudentFromMemberDialog = removeStudentFromMemberDialog;
 window.editClassroomPost = editClassroomPost;
 window.deleteClassroomPost = deleteClassroomPost;
 window.openStudentClassroom = openStudentClassroom;
+window.openClassRoomPreview = openClassRoomPreview;
 window.editScoreExam = editScoreExam;
 window.deleteScoreExam = deleteScoreExam;
 window.openScoreRanking = openScoreRanking;

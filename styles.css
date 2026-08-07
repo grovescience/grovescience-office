@@ -1025,6 +1025,26 @@ td {
   align-items: start;
 }
 
+.class-room-preview-panel {
+  margin-top: 22px;
+  display: grid;
+  gap: 16px;
+}
+
+.class-preview-summary {
+  display: grid;
+  gap: 5px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f4f8f1;
+  color: var(--muted);
+}
+
+.class-preview-summary strong {
+  color: var(--ink);
+}
+
 .classroom-form,
 .classroom-post-form {
   align-items: end;

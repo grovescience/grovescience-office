@@ -544,6 +544,39 @@
               </section>
             </div>
           </section>
+
+          <section class="panel class-room-preview-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>반별 미리보기</h2>
+                <span>반 학생들에게 연결된 과수원ON 수업방을 한 번에 확인합니다.</span>
+              </div>
+            </div>
+            <div class="inline-form">
+              <label class="field-label">
+                반
+                <select id="classRoomPreviewSelect"></select>
+              </label>
+              <button class="primary-button" id="classRoomPreviewBtn" type="button">반 미리보기</button>
+            </div>
+            <div class="class-preview-summary" id="classRoomPreviewSummary">반을 선택하면 연결 현황이 표시됩니다.</div>
+            <div class="section-split classroom-student-grid">
+              <section class="panel">
+                <div class="panel-heading">
+                  <h2>수업방 목록</h2>
+                  <span id="classRoomPreviewCount">0개</span>
+                </div>
+                <div class="student-classroom-list" id="classRoomPreviewList"></div>
+              </section>
+              <section class="panel">
+                <div class="panel-heading">
+                  <h2 id="classRoomPreviewPostTitle">게시글</h2>
+                  <span>최신순</span>
+                </div>
+                <div class="student-post-list" id="classRoomPreviewPosts"></div>
+              </section>
+            </div>
+          </section>
         </section>
 
         <section class="view" id="books">
