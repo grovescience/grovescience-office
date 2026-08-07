@@ -815,7 +815,14 @@
             <input id="waitId" type="hidden" />
             <div class="inline-form waitlist-form">
               <input id="waitName" placeholder="학생 이름" />
-              <input id="waitSchool" list="schoolOptions" placeholder="학교" />
+              <label class="field-label">
+                학교
+                <select id="waitSchoolSelect"></select>
+              </label>
+              <label class="field-label" id="waitSchoolCustomWrap" hidden>
+                학교 직접 입력
+                <input id="waitSchoolCustom" placeholder="학교 이름" />
+              </label>
               <select id="waitGrade">
                 <option>초3</option>
                 <option>초4</option>
@@ -826,7 +833,13 @@
                 <option>중3</option>
                 <option>고1</option>
                 <option>고2</option>
+                <option>고3</option>
+                <option value="기타">기타</option>
               </select>
+              <label class="field-label" id="waitGradeCustomWrap" hidden>
+                기타 학년 직접 입력
+                <input id="waitGradeCustom" placeholder="예: 검정고시, 성인" />
+              </label>
               <label class="field-label">
                 대기일자
                 <input id="waitDate" type="date" />

@@ -719,6 +719,8 @@ function bindEvents() {
   $("#statusInput").addEventListener("change", syncStudentStatusDates);
   $("#waitAutoAdvance").addEventListener("change", syncWaitAutoAdvanceFields);
   $("#waitGrade").addEventListener("change", suggestWaitNextClass);
+  $("#waitGrade").addEventListener("change", syncWaitGradeCustomField);
+  $("#waitSchoolSelect").addEventListener("change", syncWaitSchoolCustomField);
   $("#waitClass").addEventListener("change", suggestWaitNextClass);
   $$('[data-student-list]').forEach((button) => {
     button.addEventListener("click", () => selectStudentList(button.dataset.studentList));
@@ -987,13 +989,46 @@ function getSavedSchoolNames() {
 
 function renderSchoolOptions() {
   const list = $("#schoolOptions");
-  if (!list) return;
-  list.textContent = "";
-  getSavedSchoolNames().forEach((school) => {
-    const option = document.createElement("option");
-    option.value = school;
-    list.appendChild(option);
-  });
+  const schools = getSavedSchoolNames();
+  if (list) {
+    list.textContent = "";
+    schools.forEach((school) => {
+      const option = document.createElement("option");
+      option.value = school;
+      list.appendChild(option);
+    });
+  }
+  const waitSelect = $("#waitSchoolSelect");
+  if (waitSelect) {
+    const selected = waitSelect.value;
+    waitSelect.innerHTML = [
+      `<option value="">학교 없음 / 학교명 지우기</option>`,
+      ...schools.map((school) => `<option value="${scoreEscape(school)}">${scoreEscape(school)}</option>`),
+      `<option value="__custom__">기타 학교 직접 입력</option>`,
+    ].join("");
+    waitSelect.value = [...waitSelect.options].some((option) => option.value === selected) ? selected : "";
+    syncWaitSchoolCustomField();
+  }
+}
+
+function syncWaitSchoolCustomField() {
+  const custom = $("#waitSchoolSelect")?.value === "__custom__";
+  if ($("#waitSchoolCustomWrap")) $("#waitSchoolCustomWrap").hidden = !custom;
+  if (!custom && $("#waitSchoolCustom")) $("#waitSchoolCustom").value = "";
+}
+
+function syncWaitGradeCustomField() {
+  const custom = $("#waitGrade")?.value === "기타";
+  if ($("#waitGradeCustomWrap")) $("#waitGradeCustomWrap").hidden = !custom;
+  if (!custom && $("#waitGradeCustom")) $("#waitGradeCustom").value = "";
+}
+
+function getWaitSchoolValue() {
+  return $("#waitSchoolSelect").value === "__custom__" ? $("#waitSchoolCustom").value.trim() : $("#waitSchoolSelect").value;
+}
+
+function getWaitGradeValue() {
+  return $("#waitGrade").value === "기타" ? $("#waitGradeCustom").value.trim() : $("#waitGrade").value;
 }
 
 function renderDashboard() {
@@ -2581,7 +2616,7 @@ function suggestClassForGrade(grade, previousClassName = "") {
 
 function suggestWaitNextClass() {
   if (!$("#waitAutoAdvance").checked) return;
-  const nextGrade = advanceGrade($("#waitGrade").value, 1);
+  const nextGrade = advanceGrade(getWaitGradeValue(), 1);
   const suggested = suggestClassForGrade(nextGrade, $("#waitClass").value);
   if (suggested) $("#waitNextClass").value = suggested;
 }
@@ -2621,15 +2656,20 @@ function saveWaitlistFromForm() {
 
   const existing = state.waitlist.find((record) => record.id === id);
   const waitDate = $("#waitDate").value || today();
+  const grade = getWaitGradeValue();
+  if (!grade) {
+    alert("기타 학년을 직접 입력해주세요.");
+    return;
+  }
   const record = {
     id,
     name,
-    school: $("#waitSchool").value.trim(),
-    grade: $("#waitGrade").value,
+    school: getWaitSchoolValue(),
+    grade,
     waitDate,
     className: $("#waitClass").value,
     baseYear: existing?.baseYear || Number(waitDate.slice(0, 4)),
-    baseGrade: existing?.baseGrade || $("#waitGrade").value,
+    baseGrade: existing?.baseGrade || grade,
     autoAdvance: $("#waitAutoAdvance").checked,
     nextYearClassName: $("#waitAutoAdvance").checked ? $("#waitNextClass").value : "",
     noticeDate: $("#waitNoticeDate").value,
@@ -2649,8 +2689,12 @@ function saveWaitlistFromForm() {
 function clearWaitlistForm() {
   $("#waitId").value = "";
   $("#waitName").value = "";
-  $("#waitSchool").value = "";
+  $("#waitSchoolSelect").value = "";
+  $("#waitSchoolCustom").value = "";
+  syncWaitSchoolCustomField();
   $("#waitGrade").value = "초3";
+  $("#waitGradeCustom").value = "";
+  syncWaitGradeCustomField();
   $("#waitDate").value = today();
   $("#waitClass").value = classes[0].name;
   $("#waitAutoAdvance").checked = false;
@@ -2667,8 +2711,21 @@ function editWaitlist(recordId) {
   switchView("waitlist", "대기자 명단");
   $("#waitId").value = record.id;
   $("#waitName").value = record.name;
-  $("#waitSchool").value = record.school;
-  $("#waitGrade").value = record.grade;
+  renderSchoolOptions();
+  if ([...$("#waitSchoolSelect").options].some((option) => option.value === record.school)) {
+    $("#waitSchoolSelect").value = record.school || "";
+  } else {
+    $("#waitSchoolSelect").value = "__custom__";
+    $("#waitSchoolCustom").value = record.school || "";
+  }
+  syncWaitSchoolCustomField();
+  if ([...$("#waitGrade").options].some((option) => option.value === record.grade)) {
+    $("#waitGrade").value = record.grade;
+  } else {
+    $("#waitGrade").value = "기타";
+    $("#waitGradeCustom").value = record.grade || "";
+  }
+  syncWaitGradeCustomField();
   $("#waitDate").value = record.waitDate;
   $("#waitClass").value = record.className;
   $("#waitAutoAdvance").checked = Boolean(record.autoAdvance);
