@@ -794,7 +794,10 @@ function bindEvents() {
   $("#addConsultingBtn").addEventListener("click", addConsultingRecord);
   $("#addLeadBtn").addEventListener("click", addNewConsultation);
   $("#saveWaitBtn").addEventListener("click", saveWaitlistFromForm);
-  $("#clearWaitBtn").addEventListener("click", clearWaitlistForm);
+  $("#clearWaitBtn").addEventListener("click", closeWaitlistDialog);
+  $("#openWaitlistCreateBtn").addEventListener("click", openNewWaitlistDialog);
+  $("#closeWaitlistDialogBtn").addEventListener("click", closeWaitlistDialog);
+  $("#waitlistEditorDialog").addEventListener("close", clearWaitlistForm);
   $("#saveClassroomBtn").addEventListener("click", saveClassroomFromForm);
   $("#clearClassroomBtn").addEventListener("click", closeClassroomDialog);
   $("#openClassroomCreateDialogBtn").addEventListener("click", openNewClassroomDialog);
@@ -2762,9 +2765,20 @@ function saveWaitlistFromForm() {
 
   state.waitlist = existing ? state.waitlist.map((item) => (item.id === id ? record : item)) : [...state.waitlist, record];
   saveState();
-  clearWaitlistForm();
   renderSchoolOptions();
   renderWaitlist();
+  $("#waitlistEditorDialog").close();
+}
+
+function openNewWaitlistDialog() {
+  clearWaitlistForm();
+  $("#waitlistDialogTitle").textContent = "대기자 추가";
+  $("#waitlistEditorDialog").showModal();
+  $("#waitName").focus();
+}
+
+function closeWaitlistDialog() {
+  $("#waitlistEditorDialog").close();
 }
 
 function clearWaitlistForm() {
@@ -2815,6 +2829,8 @@ function editWaitlist(recordId) {
   $("#waitNoticeDate").value = record.noticeDate;
   $("#waitMemo").value = record.memo;
   $("#saveWaitBtn").textContent = "수정 저장";
+  $("#waitlistDialogTitle").textContent = `${record.name} 상세 수정`;
+  $("#waitlistEditorDialog").showModal();
 }
 
 function markWaitlist(recordId, status) {
@@ -2886,7 +2902,7 @@ function renderWaitlistCard(record, isDone = false) {
             ? `<span class="badge">${record.status}</span><button class="mini-button" type="button" onclick="restoreWaitlist('${record.id}')">대기 복구</button>`
             : `<button class="mini-button" type="button" onclick="markWaitlist('${record.id}', '등록')">등록</button><button class="mini-button" type="button" onclick="markWaitlist('${record.id}', '미등록')">미등록</button>`
         }
-        <button class="mini-button" type="button" onclick="editWaitlist('${record.id}')">수정</button>
+        <button class="mini-button" type="button" onclick="editWaitlist('${record.id}')">상세 수정</button>
         <button class="mini-button danger" type="button" onclick="deleteWaitlist('${record.id}')">삭제</button>
       </div>
     </article>
