@@ -675,6 +675,21 @@ td {
   cursor: not-allowed;
 }
 
+.special-class-date-field[hidden] {
+  display: none;
+}
+
+.special-class-period {
+  display: inline-flex;
+  margin-top: 7px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fff0dd;
+  color: #96540b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .class-card-actions {
   display: flex;
   align-items: center;
@@ -1991,10 +2006,11 @@ dialog::backdrop {
 .calendar-day small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 4px; padding: 2px 4px; }
 .calendar-class { background: #edf7f1; color: #276648; }
 .calendar-event { background: #fff0dd; color: #96540b; }
+.calendar-academic { background: #eef3ff; color: #3f5ca8; font-weight: 800; }
 .calendar-closed { background: #fff0ef; color: #a33c32; font-weight: 800; }
 .calendar-makeup { background: #eef2ff; color: #4056a1; font-weight: 800; }
 .calendar-more { color: var(--muted); font-weight: 800; }
-.schedule-editor { display: grid; grid-template-columns: 140px 135px 110px 110px minmax(170px, 1fr) minmax(170px, 1fr) auto; gap: 10px; align-items: end; margin-top: 18px; }
+.schedule-editor { display: grid; grid-template-columns: 135px 135px 140px 105px 105px minmax(160px, 1fr) minmax(150px, 1fr) auto; gap: 10px; align-items: end; margin-top: 18px; }
 .schedule-editor .wide { grid-column: auto; }
 .schedule-move-fields { grid-column: 1 / -1; display: grid; grid-template-columns: auto 170px 140px 140px 1fr; gap: 10px; align-items: end; padding: 12px; border: 1px solid #d7def5; border-radius: 9px; background: #f7f8ff; }
 .schedule-move-fields[hidden] { display: none; }
