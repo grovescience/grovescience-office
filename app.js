@@ -2846,6 +2846,7 @@ function renderWaitlist() {
   const active = state.waitlist.filter((record) => record.status === "대기");
   const done = state.waitlist.filter((record) => record.status !== "대기");
   $("#waitActiveCount").textContent = `${active.length}명`;
+  $("#waitDoneCount").textContent = `${done.length}명 · 등록 / 미등록`;
   $("#waitlistActive").innerHTML = active.length
     ? active.map((record) => renderWaitlistCard(record)).join("")
     : `<div class="empty-state">현재 대기자가 없습니다.</div>`;
@@ -2861,18 +2862,23 @@ function renderWaitlist() {
 function renderWaitlistCard(record, isDone = false) {
   const projection = getWaitlistProjection(record);
   const projectionText = projection.advanced
-    ? `<p class="${projection.needsRelink ? "wait-relink" : "wait-projection"}">${new Date().getFullYear()}년 자동 반영: ${projection.grade} · ${projection.needsRelink ? "반 다시 연결 필요" : `대기반 ${projection.className}`}</p>`
+    ? `<span class="${projection.needsRelink ? "wait-relink" : "wait-projection"}">${new Date().getFullYear()}년 자동 반영 · ${projection.grade} · ${projection.needsRelink ? "반 다시 연결 필요" : projection.className}</span>`
     : record.autoAdvance
-      ? `<p class="wait-projection">다음 해 예정: ${advanceGrade(record.baseGrade || record.grade, 1)} · ${record.nextYearClassName || "반 다시 연결 필요"}</p>`
+      ? `<span class="wait-projection">다음 해 예정 · ${advanceGrade(record.baseGrade || record.grade, 1)} · ${record.nextYearClassName || "반 다시 연결 필요"}</span>`
       : "";
   return `
     <article class="wait-card ${isDone ? "done" : ""}">
-      <div>
-        <strong>${record.name}</strong>
-        <p>${record.school || "-"} · ${record.grade} · 대기반 ${record.className}</p>
-        ${projectionText}
-        <p>대기일 ${record.waitDate || "-"} · 자리 안내일 ${record.noticeDate || "미정"}</p>
-        <p>${record.memo || "메모 없음"}</p>
+      <div class="wait-card-info">
+        <div class="wait-card-primary">
+          <strong>${record.name}</strong>
+          <span>${record.school || "-"} · ${record.grade}</span>
+          <span class="wait-class-chip">${record.className}</span>
+          <span class="wait-date-text">대기 ${record.waitDate || "-"} · 안내 ${record.noticeDate || "미정"}</span>
+        </div>
+        <div class="wait-card-secondary">
+          ${projectionText}
+          <span class="wait-memo">${record.memo || "메모 없음"}</span>
+        </div>
       </div>
       <div class="wait-actions">
         ${
