@@ -1196,6 +1196,15 @@ function syncScheduleMoveFields() {
   $("#scheduleMoveFields").hidden = !["휴강", "수업 취소"].includes(type);
 }
 
+function scheduleCalendarClass(item) {
+  if (item.kind === "class") return "calendar-class";
+  if (item.kind === "makeup") return "calendar-makeup";
+  if (item.type === "개인 일정") return "calendar-personal";
+  if (String(item.type || "").startsWith("학교 ")) return "calendar-academic";
+  if (["학원 휴무", "학원 방학", "휴강", "수업 취소"].includes(item.type)) return "calendar-closed";
+  return "calendar-event";
+}
+
 function renderScheduleCalendar() {
   const year = calendarCursor.getFullYear(), month = calendarCursor.getMonth();
   $("#calendarMonthLabel").textContent = `${year}년 ${month + 1}월`;
@@ -1205,7 +1214,7 @@ function renderScheduleCalendar() {
   for (let day = 1; day <= lastDate; day += 1) {
     const date = new Date(year, month, day), key = dateKey(date);
     const items = scheduleItemsForDate(key);
-    cells.push(`<button class="calendar-day ${key === today() ? "today" : ""} ${key === selectedScheduleDate ? "selected" : ""}" type="button" onclick="selectScheduleDate('${key}')"><span>${day}</span>${items.slice(0, 5).map((item) => `<small class="${item.kind === "class" ? "calendar-class" : item.kind === "makeup" ? "calendar-makeup" : String(item.type || "").startsWith("학교 ") ? "calendar-academic" : ["학원 휴무", "학원 방학", "휴강", "수업 취소"].includes(item.type) ? "calendar-closed" : "calendar-event"}">${scheduleTimeRange(item.time, item.endTime) ? `${scheduleTimeRange(item.time, item.endTime)} ` : ""}${item.title}${item.kind === "event" ? scheduleMoveText(item) : ""}</small>`).join("")}${items.length > 5 ? `<small class="calendar-more">+${items.length - 5}개 더보기</small>` : ""}</button>`);
+    cells.push(`<button class="calendar-day ${key === today() ? "today" : ""} ${key === selectedScheduleDate ? "selected" : ""}" type="button" onclick="selectScheduleDate('${key}')"><span>${day}</span>${items.slice(0, 5).map((item) => `<small class="${scheduleCalendarClass(item)}">${scheduleTimeRange(item.time, item.endTime) ? `${scheduleTimeRange(item.time, item.endTime)} ` : ""}${item.title}${item.kind === "event" ? scheduleMoveText(item) : ""}</small>`).join("")}${items.length > 5 ? `<small class="calendar-more">+${items.length - 5}개 더보기</small>` : ""}</button>`);
   }
   $("#academyCalendar").innerHTML = cells.join("");
   renderScheduleAgenda();
@@ -1245,7 +1254,7 @@ function deleteScheduleEvent(id) {
 
 function renderScheduleAgenda() {
   const items = scheduleItemsForDate(selectedScheduleDate);
-  $("#scheduleAgenda").innerHTML = `<h3>${selectedScheduleDate} 일정 · 시간순</h3>` + (items.map((item) => `<article class="schedule-agenda-${item.kind}"><span class="badge ${item.kind === "class" ? "" : "orange"}">${item.type}</span><time>${scheduleTimeRange(item.time, item.endTime) || (String(item.type || "").startsWith("학교 ") ? "종일" : "시간 미정")}</time><strong>${item.title}${item.kind === "event" ? scheduleMoveText(item) : ""}</strong><small>${item.kind === "event" ? scheduleDatePeriodText(item) : ""}${item.memo || ""}</small>${item.kind === "event" ? `<button class="mini-button danger" type="button" onclick="deleteScheduleEvent('${item.id}')">삭제</button>` : ""}</article>`).join("") || `<div class="empty-state">등록된 일정이 없습니다.</div>`);
+  $("#scheduleAgenda").innerHTML = `<h3>${selectedScheduleDate} 일정 · 시간순</h3>` + (items.map((item) => `<article class="schedule-agenda-${item.kind} ${item.type === "개인 일정" ? "schedule-agenda-personal" : ""}"><span class="badge ${item.type === "개인 일정" ? "pink" : item.kind === "class" ? "" : "orange"}">${item.type}</span><time>${scheduleTimeRange(item.time, item.endTime) || (String(item.type || "").startsWith("학교 ") ? "종일" : "시간 미정")}</time><strong>${item.title}${item.kind === "event" ? scheduleMoveText(item) : ""}</strong><small>${item.kind === "event" ? scheduleDatePeriodText(item) : ""}${item.memo || ""}</small>${item.kind === "event" ? `<button class="mini-button danger" type="button" onclick="deleteScheduleEvent('${item.id}')">삭제</button>` : ""}</article>`).join("") || `<div class="empty-state">등록된 일정이 없습니다.</div>`);
 }
 
 function openDashboardStudents() {
