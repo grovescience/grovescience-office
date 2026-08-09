@@ -85,13 +85,13 @@
             <button class="ghost-button" id="exportOnlineClassroomBtn" type="button">과수원ON 백업파일 만들기</button>
             <button class="ghost-button" id="bulkStudentAccountsBtn" type="button">미발급 학생만 일괄 발급</button>
             <button class="ghost-button" id="resetMissingStudentPasswordsBtn" type="button">비밀번호 없는 학생 일괄 재설정</button>
-            <select class="credential-status-select" id="studentCredentialsStatusFilter" aria-label="로그인 명단 학생 상태">
+            <select class="credential-status-select" id="studentCredentialsStatusFilter" data-credential-status-filter aria-label="로그인 명단 학생 상태">
               <option value="재원">재원생만</option>
               <option value="휴원">휴원생만</option>
               <option value="퇴원">퇴원생만</option>
               <option value="전체">전체 학생</option>
             </select>
-            <button class="ghost-button" id="downloadStudentCredentialsBtn" type="button">학생 아이디·비밀번호 명단</button>
+            <button class="ghost-button" id="downloadStudentCredentialsBtn" data-download-student-credentials type="button">학생 아이디·비밀번호 명단</button>
             <label class="ghost-button file-button">학생 아이디·비밀번호 CSV 복구<input id="importStudentCredentialsInput" type="file" accept=".csv,text/csv" /></label>
           </div>
         </details>
@@ -115,6 +115,13 @@
         </header>
 
         <section class="view active" id="dashboard">
+          <div class="credential-quick-bar">
+            <div><strong>학생 로그인 명단</strong><span>아이디와 저장된 임시비밀번호를 CSV로 내려받습니다.</span></div>
+            <div class="credential-quick-controls">
+              <select data-credential-status-filter aria-label="대시보드 로그인 명단 학생 상태"><option value="재원">재원생만</option><option value="휴원">휴원생만</option><option value="퇴원">퇴원생만</option><option value="전체">전체 학생</option></select>
+              <button class="primary-button" data-download-student-credentials type="button">아이디·비밀번호 명단 받기</button>
+            </div>
+          </div>
           <section class="panel schedule-panel">
             <div class="panel-heading schedule-heading">
               <div>
@@ -213,6 +220,13 @@
         </section>
 
         <section class="view" id="students">
+          <div class="credential-quick-bar">
+            <div><strong>학생 로그인 명단</strong><span>원하는 학생 상태를 선택한 뒤 CSV 명단을 받을 수 있습니다.</span></div>
+            <div class="credential-quick-controls">
+              <select data-credential-status-filter aria-label="학생 명단 로그인 계정 상태"><option value="재원">재원생만</option><option value="휴원">휴원생만</option><option value="퇴원">퇴원생만</option><option value="전체">전체 학생</option></select>
+              <button class="primary-button" data-download-student-credentials type="button">아이디·비밀번호 명단 받기</button>
+            </div>
+          </div>
           <div class="notice">
             <strong>여기가 기준 명단입니다</strong>
             <span>학생은 이 화면에서만 추가하면 됩니다. 다른 탭은 이 명단을 자동으로 가져다 씁니다.</span>

@@ -847,7 +847,8 @@ function bindEvents() {
   $("#exportOnlineClassroomBtn").addEventListener("click", exportOnlineClassroom);
   $("#bulkStudentAccountsBtn").addEventListener("click", provisionUnissuedStudentAccounts);
   $("#resetMissingStudentPasswordsBtn").addEventListener("click", resetMissingStudentPasswords);
-  $("#downloadStudentCredentialsBtn").addEventListener("click", downloadSavedStudentCredentials);
+  $$('[data-download-student-credentials]').forEach((button) => button.addEventListener("click", downloadSavedStudentCredentials));
+  $$('[data-credential-status-filter]').forEach((select) => select.addEventListener("change", () => syncCredentialStatusFilters(select.value)));
   $("#importStudentCredentialsInput").addEventListener("change", importStudentCredentials);
   $("#scoreExamType").addEventListener("change", () => { syncScoreExamForm(); renderScoreStudentInputs(); });
   $("#scoreExamClass").addEventListener("change", () => renderScoreStudentInputs());
@@ -1964,6 +1965,10 @@ function downloadSavedStudentCredentials() {
   const label = status === "전체" ? "전체학생명단" : `${status}생명단`;
   downloadStudentCredentials(rows, label);
   alert(`${status === "전체" ? "전체 학생" : `${status}생`} 아이디·임시비밀번호 명단 ${rows.length}명을 내려받았습니다.\n\n비밀번호가 비어 있는 학생은 ‘비밀번호 없는 학생 일괄 재설정’을 먼저 눌러주세요.`);
+}
+
+function syncCredentialStatusFilters(value) {
+  $$('[data-credential-status-filter]').forEach((select) => { select.value = value; });
 }
 
 function parseCsvRows(text) {

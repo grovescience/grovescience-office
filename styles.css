@@ -1445,6 +1445,47 @@ td {
   font-weight: 700;
 }
 
+.credential-quick-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid #cfe0c7;
+  border-radius: 9px;
+  background: #f5faef;
+}
+
+.credential-quick-bar strong,
+.credential-quick-bar span {
+  display: block;
+}
+
+.credential-quick-bar span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.credential-quick-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.credential-quick-controls select {
+  min-height: 40px;
+  padding: 0 34px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.credential-quick-controls button {
+  white-space: nowrap;
+}
+
 .classroom-form,
 .classroom-post-form {
   align-items: end;
@@ -2223,6 +2264,12 @@ dialog::backdrop {
 }
 
 @media (max-width: 640px) {
+  .credential-quick-bar,
+  .credential-quick-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .waitlist-toolbar {
     align-items: stretch;
     flex-direction: column;
