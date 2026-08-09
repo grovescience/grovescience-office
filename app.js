@@ -52,6 +52,7 @@ let pendingClassroomImageFiles = [];
 let classroomImagesMarkedForDeletion = new Set();
 let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let selectedScheduleDate = today();
+let editingScheduleEventId = "";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -832,6 +833,7 @@ function bindEvents() {
   $("#calendarNextBtn").addEventListener("click", () => { calendarCursor.setMonth(calendarCursor.getMonth() + 1); renderScheduleCalendar(); });
   $("#calendarTodayBtn").addEventListener("click", () => { calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1); selectScheduleDate(today()); });
   $("#addScheduleBtn").addEventListener("click", addScheduleEvent);
+  $("#cancelScheduleEditBtn").addEventListener("click", cancelScheduleEdit);
   $("#scheduleTypeInput").addEventListener("change", syncScheduleMoveFields);
 
   $("#studentForm").addEventListener("submit", (event) => {
@@ -1241,20 +1243,73 @@ function addScheduleEvent() {
   if (time && endTime && endTime <= time) return alert("종료시간은 시작시간보다 늦게 선택해주세요.");
   if (moveToDate && (!moveToTime || !moveToEndTime)) return alert("보강일을 정했다면 보강 시작시간과 종료시간도 함께 입력해주세요.");
   if (moveToTime && moveToEndTime && moveToEndTime <= moveToTime) return alert("보강 종료시간은 보강 시작시간보다 늦게 선택해주세요.");
-  state.scheduleEvents.push({ id: crypto.randomUUID(), date, endDate: scheduleEndDate, type, title, time, endTime, memo: $("#scheduleMemoInput").value.trim(), moveToDate, moveToTime, moveToEndTime, createdAt: Date.now() });
-  $("#scheduleTitleInput").value = ""; $("#scheduleMemoInput").value = ""; $("#scheduleTimeInput").value = ""; $("#scheduleEndTimeInput").value = ""; $("#scheduleEndDateInput").value = ""; $("#scheduleMoveDateInput").value = ""; $("#scheduleMoveTimeInput").value = ""; $("#scheduleMoveEndTimeInput").value = ""; selectedScheduleDate = date;
+  const existing = state.scheduleEvents.find((item) => item.id === editingScheduleEventId);
+  const eventRecord = { id: existing?.id || crypto.randomUUID(), date, endDate: scheduleEndDate, type, title, time, endTime, memo: $("#scheduleMemoInput").value.trim(), moveToDate, moveToTime, moveToEndTime, createdAt: existing?.createdAt || Date.now() };
+  if (existing) state.scheduleEvents = state.scheduleEvents.map((item) => item.id === existing.id ? eventRecord : item);
+  else state.scheduleEvents.push(eventRecord);
+  selectedScheduleDate = date;
+  clearScheduleEditor(date);
   saveState(); renderScheduleCalendar();
+}
+
+function editScheduleEvent(id) {
+  const event = state.scheduleEvents.find((item) => item.id === id);
+  if (!event) return;
+  editingScheduleEventId = event.id;
+  $("#scheduleDateInput").value = event.date || today();
+  $("#scheduleEndDateInput").value = event.endDate || "";
+  $("#scheduleTypeInput").value = event.type || "학원 행사";
+  $("#scheduleTimeInput").value = event.time || "";
+  $("#scheduleEndTimeInput").value = event.endTime || "";
+  $("#scheduleTitleInput").value = event.title || "";
+  $("#scheduleMemoInput").value = event.memo || "";
+  $("#scheduleMoveDateInput").value = event.moveToDate || "";
+  $("#scheduleMoveTimeInput").value = event.moveToTime || "";
+  $("#scheduleMoveEndTimeInput").value = event.moveToEndTime || "";
+  $("#addScheduleBtn").textContent = "일정 수정 저장";
+  $("#cancelScheduleEditBtn").hidden = false;
+  syncScheduleMoveFields();
+  document.querySelector(".schedule-editor")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  $("#scheduleTitleInput").focus({ preventScroll: true });
+}
+
+function clearScheduleEditor(date = selectedScheduleDate) {
+  editingScheduleEventId = "";
+  $("#scheduleDateInput").value = date || today();
+  $("#scheduleEndDateInput").value = "";
+  $("#scheduleTypeInput").value = "학원 행사";
+  $("#scheduleTimeInput").value = "";
+  $("#scheduleEndTimeInput").value = "";
+  $("#scheduleTitleInput").value = "";
+  $("#scheduleMemoInput").value = "";
+  $("#scheduleMoveDateInput").value = "";
+  $("#scheduleMoveTimeInput").value = "";
+  $("#scheduleMoveEndTimeInput").value = "";
+  $("#addScheduleBtn").textContent = "일정 추가";
+  $("#cancelScheduleEditBtn").hidden = true;
+  syncScheduleMoveFields();
+}
+
+function cancelScheduleEdit() {
+  clearScheduleEditor();
 }
 
 function deleteScheduleEvent(id) {
   const event = state.scheduleEvents.find((item) => item.id === id);
   if (!event || !confirm(`${event.title} 일정을 삭제할까요?`)) return;
-  state.scheduleEvents = state.scheduleEvents.filter((item) => item.id !== id); saveState(); renderScheduleCalendar();
+  state.scheduleEvents = state.scheduleEvents.filter((item) => item.id !== id);
+  if (editingScheduleEventId === id) clearScheduleEditor();
+  saveState(); renderScheduleCalendar();
+}
+
+function scheduleEventActionButtons(item) {
+  if (item.kind !== "event") return "";
+  return `<div class="schedule-agenda-actions"><button class="mini-button" type="button" onclick="editScheduleEvent('${item.id}')">수정</button><button class="mini-button danger" type="button" onclick="deleteScheduleEvent('${item.id}')">삭제</button></div>`;
 }
 
 function renderScheduleAgenda() {
   const items = scheduleItemsForDate(selectedScheduleDate);
-  $("#scheduleAgenda").innerHTML = `<h3>${selectedScheduleDate} 일정 · 시간순</h3>` + (items.map((item) => `<article class="schedule-agenda-${item.kind} ${item.type === "개인 일정" ? "schedule-agenda-personal" : ""}"><span class="badge ${item.type === "개인 일정" ? "pink" : item.kind === "class" ? "" : "orange"}">${item.type}</span><time>${scheduleTimeRange(item.time, item.endTime) || (String(item.type || "").startsWith("학교 ") ? "종일" : "시간 미정")}</time><strong>${item.title}${item.kind === "event" ? scheduleMoveText(item) : ""}</strong><small>${item.kind === "event" ? scheduleDatePeriodText(item) : ""}${item.memo || ""}</small>${item.kind === "event" ? `<button class="mini-button danger" type="button" onclick="deleteScheduleEvent('${item.id}')">삭제</button>` : ""}</article>`).join("") || `<div class="empty-state">등록된 일정이 없습니다.</div>`);
+  $("#scheduleAgenda").innerHTML = `<h3>${selectedScheduleDate} 일정 · 시간순</h3>` + (items.map((item) => `<article class="schedule-agenda-${item.kind} ${item.type === "개인 일정" ? "schedule-agenda-personal" : ""}"><span class="badge ${item.type === "개인 일정" ? "pink" : item.kind === "class" ? "" : "orange"}">${item.type}</span><time>${scheduleTimeRange(item.time, item.endTime) || (String(item.type || "").startsWith("학교 ") ? "종일" : "시간 미정")}</time><strong>${item.title}${item.kind === "event" ? scheduleMoveText(item) : ""}</strong><small>${item.kind === "event" ? scheduleDatePeriodText(item) : ""}${item.memo || ""}</small>${scheduleEventActionButtons(item)}</article>`).join("") || `<div class="empty-state">등록된 일정이 없습니다.</div>`);
 }
 
 function openDashboardStudents() {
