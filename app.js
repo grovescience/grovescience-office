@@ -34,6 +34,7 @@ applyClassSettings();
 let selectedPaymentClass = "전체";
 let selectedPaymentFilter = "미납자";
 let selectedStudentList = "active";
+let selectedActiveStudentGroup = "all";
 let selectedStudentSort = "oldest";
 let serverSaveTimer = null;
 let syncingFromServer = false;
@@ -841,6 +842,9 @@ function bindEvents() {
   $("#waitClass").addEventListener("change", suggestWaitNextClass);
   $$('[data-student-list]').forEach((button) => {
     button.addEventListener("click", () => selectStudentList(button.dataset.studentList));
+  });
+  $$('[data-active-student-group]').forEach((button) => {
+    button.addEventListener("click", () => selectActiveStudentGroup(button.dataset.activeStudentGroup));
   });
   $$('[data-student-sort]').forEach((button) => {
     button.addEventListener("click", () => selectStudentSort(button.dataset.studentSort));
@@ -1855,16 +1859,32 @@ function filteredStudents() {
       : selectedStudentList === "paused"
         ? student.status === "휴원"
         : !["퇴원", "휴원"].includes(student.status);
+    const hasRegularClass = Boolean(student.className && !isSpecialClassName(student.className));
+    const hasSpecialClass = Boolean(
+      (student.specialClassNames || []).length || (student.className && isSpecialClassName(student.className)),
+    );
+    const matchesActiveGroup = selectedStudentList !== "active"
+      || selectedActiveStudentGroup === "all"
+      || (selectedActiveStudentGroup === "regular" ? hasRegularClass : hasSpecialClass);
     const matchesStatus = selectedStudentList !== "active" || status === "전체" || student.status === status;
-    return matchesKeyword && matchesClass && matchesStatus && matchesList;
+    return matchesKeyword && matchesClass && matchesStatus && matchesList && matchesActiveGroup;
   });
 }
 
 function selectStudentList(list) {
   selectedStudentList = ["active", "paused", "retired"].includes(list) ? list : "active";
   $$('[data-student-list]').forEach((button) => button.classList.toggle("active", button.dataset.studentList === selectedStudentList));
+  $("#activeStudentGroupTabs").hidden = selectedStudentList !== "active";
   $("#statusFilter").disabled = selectedStudentList !== "active";
   if (selectedStudentList !== "active") $("#statusFilter").value = "전체";
+  renderStudents();
+}
+
+function selectActiveStudentGroup(group) {
+  selectedActiveStudentGroup = ["all", "regular", "special"].includes(group) ? group : "all";
+  $$('[data-active-student-group]').forEach((button) =>
+    button.classList.toggle("active", button.dataset.activeStudentGroup === selectedActiveStudentGroup),
+  );
   renderStudents();
 }
 
@@ -1928,7 +1948,12 @@ function finishSelectedSpecialClass() {
 function renderStudents() {
   ensureStudentClassroomCodes();
   const students = sortStudentsByRegistration(filteredStudents());
-  $("#studentListTitle").textContent = selectedStudentList === "retired" ? "퇴원생 목록" : selectedStudentList === "paused" ? "휴원생 목록" : "재원생 목록";
+  const activeGroupTitle = selectedActiveStudentGroup === "regular"
+    ? "정규반 재원생 목록"
+    : selectedActiveStudentGroup === "special"
+      ? "방학특강 재원생 목록"
+      : "전체 재원생 목록";
+  $("#studentListTitle").textContent = selectedStudentList === "retired" ? "퇴원생 목록" : selectedStudentList === "paused" ? "휴원생 목록" : activeGroupTitle;
   syncFinishSpecialClassButton();
   $("#studentCountLabel").textContent = `${students.length}명`;
   $("#studentTable").innerHTML = students.length

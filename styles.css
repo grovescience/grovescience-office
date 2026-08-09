@@ -756,10 +756,37 @@ td {
 }
 
 .student-list-tabs,
+.active-student-group-tabs > div,
 .student-sort-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.active-student-group-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: -4px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid #eadfca;
+  border-radius: 10px;
+  background: #fffaf1;
+}
+
+.active-student-group-tabs[hidden] {
+  display: none;
+}
+
+.active-student-group-tabs > strong {
+  color: #8a5a00;
+  font-size: 13px;
+}
+
+.active-student-group-tabs > span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .student-sort-row {
@@ -864,6 +891,7 @@ td {
 }
 
 .student-list-tabs button,
+.active-student-group-tabs button,
 .student-sort-tabs button {
   min-height: 38px;
   padding: 0 14px;
@@ -876,6 +904,7 @@ td {
 }
 
 .student-list-tabs button.active,
+.active-student-group-tabs button.active,
 .student-sort-tabs button.active {
   border-color: #b9d2bf;
   background: #edf6ef;
