@@ -342,6 +342,8 @@ function normalizeClassSettings(settings = {}, customClasses = state?.customClas
       tuition: Number(item.tuition || classInfo.tuition || 0),
       startDate: String(item.startDate || classInfo.startDate || ""),
       endDate: String(item.endDate || classInfo.endDate || ""),
+      manuallyEnded: Boolean(item.manuallyEnded),
+      endedAt: normalizeDateValue(item.endedAt) || "",
     };
     return saved;
   }, {});
@@ -366,6 +368,8 @@ function normalizeCustomClasses(customClasses = []) {
       tuition: Number(classInfo.tuition || 0),
       startDate: String(classInfo.startDate || ""),
       endDate: String(classInfo.endDate || ""),
+      manuallyEnded: Boolean(classInfo.manuallyEnded),
+      endedAt: normalizeDateValue(classInfo.endedAt) || "",
       custom: true,
       createdAt: classInfo.createdAt || Date.now(),
     }))
@@ -667,9 +671,21 @@ function getCycleSessionFromAnchor(anchor, date) {
   return zeroBased + 1;
 }
 
-function classOptions(includeAll = false) {
+function hasClassPeriodEnded(classInfo, dateValue = today()) {
+  return Boolean(classInfo) && isSpecialClassName(classInfo.name) && Boolean(classInfo.endDate) && classInfo.endDate < dateValue;
+}
+
+function isClassEnded(classInfo, dateValue = today()) {
+  if (!classInfo) return false;
+  if (classInfo.manuallyEnded) return true;
+  return hasClassPeriodEnded(classInfo, dateValue);
+}
+
+function classOptions(includeAll = false, includeEnded = false) {
   const options = includeAll ? ['<option value="전체">전체 반</option>'] : [];
-  return options.concat(classes.map((item) => `<option value="${item.name}">${item.name}</option>`)).join("");
+  return options.concat(classes
+    .filter((item) => includeEnded || !isClassEnded(item))
+    .map((item) => `<option value="${item.name}">${item.name}${isClassEnded(item) ? " (종강)" : ""}</option>`)).join("");
 }
 
 function isSpecialClassName(className) {
@@ -677,9 +693,11 @@ function isSpecialClassName(className) {
   return classInfo?.type === "방학특강" || String(className || "").includes("특강") || String(className || "").includes("방학");
 }
 
-function regularClassOptions(includeEmpty = true) {
+function regularClassOptions(includeEmpty = true, selectedClassName = "") {
   const options = includeEmpty ? ['<option value="">정규반 없음</option>'] : [];
-  return options.concat(classes.filter((item) => !isSpecialClassName(item.name)).map((item) => `<option value="${item.name}">${item.name}</option>`)).join("");
+  return options.concat(classes
+    .filter((item) => !isSpecialClassName(item.name) && (!isClassEnded(item) || item.name === selectedClassName))
+    .map((item) => `<option value="${item.name}">${item.name}${isClassEnded(item) ? " (종강)" : ""}</option>`)).join("");
 }
 
 function getStudentClassNames(student) {
@@ -698,9 +716,9 @@ function formatStudentClasses(student) {
 
 function renderSpecialClassChecks(selected = []) {
   const selectedSet = new Set(selected || []);
-  const specialClasses = classes.filter((item) => isSpecialClassName(item.name));
+  const specialClasses = classes.filter((item) => isSpecialClassName(item.name) && (!isClassEnded(item) || selectedSet.has(item.name)));
   $("#specialClassChecks").innerHTML = specialClasses.length
-    ? specialClasses.map((item) => `<label><input type="checkbox" value="${item.name}" ${selectedSet.has(item.name) ? "checked" : ""} />${item.name}</label>`).join("")
+    ? specialClasses.map((item) => `<label><input type="checkbox" value="${item.name}" ${selectedSet.has(item.name) ? "checked" : ""} />${item.name}${isClassEnded(item) ? " (종강)" : ""}</label>`).join("")
     : `<span class="muted-text">반관리에서 특강반을 만들면 여기에 표시됩니다.</span>`;
 }
 
@@ -722,7 +740,7 @@ function setup() {
   syncAttendanceWeekdayToDate();
   $("#paymentMonth").value = currentMonth();
   $("#consultingDate").value = today();
-  $("#consultingClass").innerHTML = classOptions(true);
+  $("#consultingClass").innerHTML = classOptions(true, true);
   $("#classroomPostLessonDateInput").value = today();
   $("#scheduleDateInput").value = today();
   $("#scheduleEndDateInput").value = "";
@@ -732,6 +750,7 @@ function setup() {
   $("#scoreExamDate").value = today();
   $("#scoreExamSubject").value = "과학";
   $("#scoreExamClass").innerHTML = classOptions();
+  refreshCredentialClassFilters();
   $("#classFilter").innerHTML = classOptions(true);
   $("#attendanceClass").innerHTML = classOptions();
   $("#homeworkClass").innerHTML = classOptions(true);
@@ -804,7 +823,7 @@ function bindEvents() {
   $("#classTypeInput").addEventListener("change", syncSpecialClassDateFields);
   $("#newClassBtn").addEventListener("click", startNewClassForm);
   $("#saveClassInfoBtn").addEventListener("click", saveClassInfoFromForm);
-  $("#deleteClassInfoBtn").addEventListener("click", deleteClassInfoFromForm);
+  $("#toggleClassEndedBtn").addEventListener("click", toggleSelectedClassEnded);
   $("#saveClassHomeworkBtn").addEventListener("click", saveClassHomework);
   $("#copyClassHomeworkBtn").addEventListener("click", copyClassHomeworkMessage);
   $("#aiReportStudent").addEventListener("change", fillAiReportDefaults);
@@ -849,6 +868,7 @@ function bindEvents() {
   $("#resetMissingStudentPasswordsBtn").addEventListener("click", resetMissingStudentPasswords);
   $$('[data-download-student-credentials]').forEach((button) => button.addEventListener("click", downloadSavedStudentCredentials));
   $$('[data-credential-status-filter]').forEach((select) => select.addEventListener("change", () => syncCredentialStatusFilters(select.value)));
+  $$('[data-credential-class-filter]').forEach((select) => select.addEventListener("change", () => syncCredentialClassFilters(select.value)));
   $("#importStudentCredentialsInput").addEventListener("change", importStudentCredentials);
   $("#scoreExamType").addEventListener("change", () => { syncScoreExamForm(); renderScoreStudentInputs(); });
   $("#scoreExamClass").addEventListener("change", () => renderScoreStudentInputs());
@@ -1251,6 +1271,7 @@ function getClassWeekdays(item) {
 
 function isClassActiveOnDate(classInfo, dateValue) {
   if (!classInfo || !dateValue) return false;
+  if (classInfo.manuallyEnded && (!classInfo.endedAt || dateValue >= classInfo.endedAt)) return false;
   if (classInfo.startDate && dateValue < classInfo.startDate) return false;
   if (classInfo.endDate && dateValue > classInfo.endDate) return false;
   return true;
@@ -1463,6 +1484,11 @@ function openDashboardAttendance(className) {
 function renderClasses() {
   $("#regularClassList").innerHTML = renderClassCards("정규반");
   $("#specialClassList").innerHTML = renderClassCards("방학특강");
+  const endedClasses = classes.filter((item) => isClassEnded(item));
+  $("#endedClassCountLabel").textContent = `${endedClasses.length}개`;
+  $("#endedClassList").innerHTML = endedClasses.length
+    ? endedClasses.map((item) => renderClassCard(item, true)).join("")
+    : `<div class="empty-state">아직 종강된 반이 없습니다.</div>`;
 }
 
 function fillClassEditForm() {
@@ -1487,7 +1513,8 @@ function fillClassEditForm() {
   $("#classSubjectInput").value = classInfo.subject || subjectChoices[0];
   $("#classBookInput").value = classInfo.defaultBook || "";
   $("#classTuitionInput").value = classInfo.tuition || "";
-  $("#deleteClassInfoBtn").disabled = !isCustomClass(classInfo.name);
+  $("#toggleClassEndedBtn").disabled = false;
+  $("#toggleClassEndedBtn").textContent = hasClassPeriodEnded(classInfo) ? "종료일 수정 필요" : classInfo.manuallyEnded ? "종강 취소" : "반 종강 처리";
   syncSpecialClassDateFields();
 }
 
@@ -1510,7 +1537,8 @@ function startNewClassForm(clearSelect = true) {
   $("#classSubjectInput").value = "교과과학";
   $("#classBookInput").value = "";
   $("#classTuitionInput").value = "";
-  $("#deleteClassInfoBtn").disabled = true;
+  $("#toggleClassEndedBtn").disabled = true;
+  $("#toggleClassEndedBtn").textContent = "반 종강 처리";
   syncSpecialClassDateFields();
   $("#classNameInput").focus();
 }
@@ -1539,6 +1567,8 @@ function saveClassInfoFromForm() {
     tuition: Number($("#classTuitionInput").value || current?.tuition || 0),
     startDate: $("#classTypeInput").value === "방학특강" ? $("#classStartDateInput").value : "",
     endDate: $("#classTypeInput").value === "방학특강" ? $("#classEndDateInput").value : "",
+    manuallyEnded: Boolean(current?.manuallyEnded),
+    endedAt: current?.endedAt || "",
     custom: !defaultClasses.some((classInfo) => classInfo.name === className),
     createdAt: current?.createdAt || Date.now(),
   };
@@ -1558,6 +1588,8 @@ function saveClassInfoFromForm() {
     tuition: savedClassInfo.tuition,
     startDate: savedClassInfo.startDate,
     endDate: savedClassInfo.endDate,
+    manuallyEnded: savedClassInfo.manuallyEnded,
+    endedAt: savedClassInfo.endedAt,
   };
   state.classSettings = normalizeClassSettings(state.classSettings, state.customClasses);
   applyClassSettings();
@@ -1575,37 +1607,41 @@ function selectClassForEdit(className) {
   $("#classTimeInput").focus();
 }
 
-function isCustomClass(className) {
-  return (state.customClasses || []).some((classInfo) => classInfo.name === className);
-}
-
-function deleteClassInfoFromForm() {
+function toggleSelectedClassEnded() {
   const className = $("#classEditSelect").value;
-  if (!className || !isCustomClass(className)) {
-    alert("기본 반은 삭제할 수 없고, 새로 만든 반만 삭제할 수 있습니다.");
+  const classInfo = getClassInfo(className);
+  if (!classInfo) return alert("종강 처리할 반을 먼저 선택해주세요.");
+  if (hasClassPeriodEnded(classInfo)) {
+    alert("종료일이 지나 자동 종강된 특강입니다. 다시 운영하려면 특강 종강일을 오늘 이후로 수정해주세요.");
     return;
   }
+  const ending = !classInfo.manuallyEnded;
   const studentCount = state.students.filter((student) => studentBelongsToClass(student, className)).length;
-  if (studentCount > 0) {
-    alert(`${className}에 학생 ${studentCount}명이 연결되어 있어 삭제할 수 없습니다. 학생의 수강반을 먼저 바꿔주세요.`);
-    return;
-  }
-  const waitlistCount = (state.waitlist || []).filter((record) => {
-    const projection = getWaitlistProjection(record);
-    return record.className === className || record.nextYearClassName === className || projection.className === className;
-  }).length;
-  if (waitlistCount > 0) {
-    alert(`${className}에 대기자 ${waitlistCount}명이 연결되어 있어 삭제할 수 없습니다. 대기자 명단에서 새 반으로 먼저 연결해주세요.`);
-    return;
-  }
-  if (!confirm(`${className} 반을 삭제할까요?`)) return;
-  state.customClasses = (state.customClasses || []).filter((classInfo) => classInfo.name !== className);
-  if (state.classSettings) delete state.classSettings[className];
+  const message = ending
+    ? `${className}을(를) 종강 처리할까요?\n\n학생 ${studentCount}명의 소속과 과거 기록은 보관되고, 운영 목록과 시간표에서만 빠집니다. 과수원ON에 수동 설정한 이용 종료일도 그대로 유지됩니다.`
+    : `${className}의 종강을 취소하고 운영 중인 반으로 되돌릴까요?`;
+  if (!confirm(message)) return;
+  state.classSettings = state.classSettings || {};
+  state.classSettings[className] = {
+    ...(state.classSettings[className] || {}),
+    time: classInfo.time,
+    frequency: classInfo.frequency,
+    subject: classInfo.subject,
+    defaultBook: classInfo.defaultBook,
+    tuition: classInfo.tuition,
+    startDate: classInfo.startDate || "",
+    endDate: classInfo.endDate || "",
+    manuallyEnded: ending,
+    endedAt: ending ? today() : "",
+  };
+  state.classSettings = normalizeClassSettings(state.classSettings, state.customClasses);
   applyClassSettings();
   saveState();
   refreshClassControls();
-  startNewClassForm();
+  $("#classEditSelect").value = className;
+  fillClassEditForm();
   renderAll();
+  alert(ending ? `${className}을(를) 종강반으로 이동했습니다.` : `${className}을(를) 운영 중인 반으로 복구했습니다.`);
 }
 
 function refreshClassControls() {
@@ -1621,6 +1657,7 @@ function refreshClassControls() {
   };
 
   $("#classFilter").innerHTML = classOptions(true);
+  refreshCredentialClassFilters();
   $("#attendanceClass").innerHTML = classOptions();
   $("#homeworkClass").innerHTML = classOptions(true);
   $("#classInput").innerHTML = regularClassOptions();
@@ -1638,29 +1675,34 @@ function refreshClassControls() {
 }
 
 function renderClassCards(type) {
-  return classes
-    .filter((item) => item.type === type)
-    .map((item) => {
-      const count = state.students.filter((student) => studentBelongsToClass(student, item.name)).length;
-      const specialStatus = item.startDate && today() < item.startDate ? " · 개강 전" : item.endDate && today() > item.endDate ? " · 종료" : "";
-      const periodText = type === "방학특강" && (item.startDate || item.endDate)
-        ? `<span class="special-class-period">${item.startDate || "시작일 미정"} ~ ${item.endDate || "종료일 미정"}${specialStatus}</span>`
-        : "";
-      return `
-        <article class="class-card">
-          <div>
-            <button class="link-name-button" type="button" onclick="openClassStudentList('${item.name}')">${item.name}</button>
-            <small>${item.time} · ${item.frequency} · ${item.subject} · ${item.defaultBook} · ${formatMoney(item.tuition)}</small>
-            ${periodText}
-          </div>
-          <div class="class-card-actions">
-            <span class="badge ${type === "방학특강" ? "orange" : ""}">${count}명</span>
-            <button class="mini-button" type="button" onclick="selectClassForEdit('${item.name}')">수정</button>
-          </div>
-        </article>
-      `;
-    })
-    .join("");
+  const activeClasses = classes.filter((item) => item.type === type && !isClassEnded(item));
+  return activeClasses.length
+    ? activeClasses.map((item) => renderClassCard(item, false)).join("")
+    : `<div class="empty-state">현재 운영 중인 ${type}이 없습니다.</div>`;
+}
+
+function renderClassCard(item, ended = false) {
+  const count = state.students.filter((student) => studentBelongsToClass(student, item.name)).length;
+  const autoEnded = ended && hasClassPeriodEnded(item);
+  const specialStatus = item.startDate && today() < item.startDate ? " · 개강 전" : autoEnded ? " · 자동 종강" : "";
+  const periodText = item.type === "방학특강" && (item.startDate || item.endDate)
+    ? `<span class="special-class-period">${item.startDate || "시작일 미정"} ~ ${item.endDate || "종료일 미정"}${specialStatus}</span>`
+    : ended ? `<span class="special-class-period ended">${item.endedAt || "종강일 미기록"} · 수동 종강</span>` : "";
+  return `
+    <article class="class-card ${ended ? "ended" : ""}">
+      <div>
+        <button class="link-name-button" type="button" onclick="openClassStudentList('${item.name}')">${item.name}</button>
+        <small>${item.time} · ${item.frequency} · ${item.subject} · ${item.defaultBook} · ${formatMoney(item.tuition)}</small>
+        ${periodText}
+      </div>
+      <div class="class-card-actions">
+        <span class="badge ${item.type === "방학특강" ? "orange" : ""}">${count}명</span>
+        <button class="mini-button" type="button" onclick="selectClassForEdit('${item.name}')">수정</button>
+        ${ended && item.manuallyEnded && !autoEnded ? `<button class="mini-button" type="button" onclick="selectClassForEdit('${item.name}'); toggleSelectedClassEnded();">종강 취소</button>` : ""}
+        ${!ended ? `<button class="mini-button danger" type="button" onclick="selectClassForEdit('${item.name}'); toggleSelectedClassEnded();">종강</button>` : ""}
+      </div>
+    </article>
+  `;
 }
 
 function openClassStudentList(className) {
@@ -1959,16 +2001,35 @@ function savedStudentCredentialRows(students = state.students) {
 
 function downloadSavedStudentCredentials() {
   const status = $("#studentCredentialsStatusFilter")?.value || "재원";
-  const targetStudents = status === "전체" ? state.students : state.students.filter((student) => student.status === status);
+  const className = $("#studentCredentialsClassFilter")?.value || "전체";
+  const targetStudents = state.students.filter((student) =>
+    (status === "전체" || student.status === status) && studentBelongsToClass(student, className),
+  );
   const rows = savedStudentCredentialRows(targetStudents);
-  if (!rows.length) return alert(`${status === "전체" ? "전체" : `${status}생`} 중 발급된 학생 계정이 없습니다.`);
-  const label = status === "전체" ? "전체학생명단" : `${status}생명단`;
+  const statusLabel = status === "전체" ? "전체 학생" : `${status}생`;
+  const classLabel = className === "전체" ? "전체 반" : className;
+  if (!rows.length) return alert(`${classLabel}의 ${statusLabel} 중 발급된 학생 계정이 없습니다.`);
+  const label = `${className === "전체" ? "전체반" : className}-${status === "전체" ? "전체학생" : `${status}생`}명단`;
   downloadStudentCredentials(rows, label);
-  alert(`${status === "전체" ? "전체 학생" : `${status}생`} 아이디·임시비밀번호 명단 ${rows.length}명을 내려받았습니다.\n\n비밀번호가 비어 있는 학생은 ‘비밀번호 없는 학생 일괄 재설정’을 먼저 눌러주세요.`);
+  alert(`${classLabel} · ${statusLabel} 아이디·임시비밀번호 명단 ${rows.length}명을 내려받았습니다.\n\n정규반과 특강반에 함께 등록된 학생은 양쪽 반 명단에 같은 아이디와 비밀번호로 포함됩니다.\n비밀번호가 비어 있는 학생은 ‘비밀번호 없는 학생 일괄 재설정’을 먼저 눌러주세요.`);
 }
 
 function syncCredentialStatusFilters(value) {
   $$('[data-credential-status-filter]').forEach((select) => { select.value = value; });
+}
+
+function refreshCredentialClassFilters() {
+  const selects = $$('[data-credential-class-filter]');
+  const selected = selects.find((select) => select.value)?.value || "전체";
+  const options = classOptions(true, true);
+  selects.forEach((select) => {
+    select.innerHTML = options;
+    select.value = [...select.options].some((option) => option.value === selected) ? selected : "전체";
+  });
+}
+
+function syncCredentialClassFilters(value) {
+  $$('[data-credential-class-filter]').forEach((select) => { select.value = value; });
 }
 
 function parseCsvRows(text) {
@@ -4116,7 +4177,7 @@ function openStudentDialog(studentId = "") {
   renderSchoolOptions();
   const student = state.students.find((item) => item.id === studentId);
   const classInfo = student?.className ? getClassInfo(student.className) : null;
-  $("#classInput").innerHTML = regularClassOptions();
+  $("#classInput").innerHTML = regularClassOptions(true, student?.className || "");
   const inheritedSpecials = [...new Set([...(student?.specialClassNames || []), ...(student?.className && isSpecialClassName(student.className) ? [student.className] : [])])];
   renderSpecialClassChecks(inheritedSpecials);
   $("#dialogTitle").textContent = student ? "학생 정보 수정" : "학생 추가";

@@ -91,6 +91,7 @@
               <option value="퇴원">퇴원생만</option>
               <option value="전체">전체 학생</option>
             </select>
+            <select class="credential-status-select" id="studentCredentialsClassFilter" data-credential-class-filter aria-label="로그인 명단 반 선택"></select>
             <button class="ghost-button" id="downloadStudentCredentialsBtn" data-download-student-credentials type="button">학생 아이디·비밀번호 명단</button>
             <label class="ghost-button file-button">학생 아이디·비밀번호 CSV 복구<input id="importStudentCredentialsInput" type="file" accept=".csv,text/csv" /></label>
           </div>
@@ -116,9 +117,10 @@
 
         <section class="view active" id="dashboard">
           <div class="credential-quick-bar">
-            <div><strong>학생 로그인 명단</strong><span>아이디와 저장된 임시비밀번호를 CSV로 내려받습니다.</span></div>
+            <div><strong>학생 로그인 명단</strong><span>학생 상태와 반을 골라 아이디·임시비밀번호를 CSV로 내려받습니다.</span></div>
             <div class="credential-quick-controls">
               <select data-credential-status-filter aria-label="대시보드 로그인 명단 학생 상태"><option value="재원">재원생만</option><option value="휴원">휴원생만</option><option value="퇴원">퇴원생만</option><option value="전체">전체 학생</option></select>
+              <select data-credential-class-filter aria-label="대시보드 로그인 명단 반 선택"></select>
               <button class="primary-button" data-download-student-credentials type="button">아이디·비밀번호 명단 받기</button>
             </div>
           </div>
@@ -221,9 +223,10 @@
 
         <section class="view" id="students">
           <div class="credential-quick-bar">
-            <div><strong>학생 로그인 명단</strong><span>원하는 학생 상태를 선택한 뒤 CSV 명단을 받을 수 있습니다.</span></div>
+            <div><strong>학생 로그인 명단</strong><span>원하는 학생 상태와 반을 선택한 뒤 CSV 명단을 받을 수 있습니다.</span></div>
             <div class="credential-quick-controls">
               <select data-credential-status-filter aria-label="학생 명단 로그인 계정 상태"><option value="재원">재원생만</option><option value="휴원">휴원생만</option><option value="퇴원">퇴원생만</option><option value="전체">전체 학생</option></select>
+              <select data-credential-class-filter aria-label="학생 명단 로그인 계정 반 선택"></select>
               <button class="primary-button" data-download-student-credentials type="button">아이디·비밀번호 명단 받기</button>
             </div>
           </div>
@@ -341,7 +344,7 @@
               </label>
               <button class="ghost-button" id="newClassBtn" type="button">새 반 개설</button>
               <button class="primary-button" id="saveClassInfoBtn" type="button">반 정보 저장</button>
-              <button class="ghost-button danger-button" id="deleteClassInfoBtn" type="button">새로 만든 반 삭제</button>
+              <button class="ghost-button danger-button" id="toggleClassEndedBtn" type="button">반 종강 처리</button>
             </div>
           </section>
           <div class="section-split">
@@ -360,6 +363,16 @@
               <div class="class-list" id="specialClassList"></div>
             </section>
           </div>
+          <section class="panel ended-class-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>종강반</h2>
+                <span>수동으로 종강했거나 특강 종료일이 지난 반입니다. 기록과 과수원ON 이용기한은 그대로 유지됩니다.</span>
+              </div>
+              <span id="endedClassCountLabel">0개</span>
+            </div>
+            <div class="class-list" id="endedClassList"></div>
+          </section>
         </section>
 
         <section class="view" id="attendance">
