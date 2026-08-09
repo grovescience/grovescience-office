@@ -76,6 +76,7 @@ function createInitialState() {
     classSettings: {},
     customClasses: [],
     classrooms: [],
+    announcements: [],
     scheduleEvents: [],
     scoreExams: [],
   };
@@ -95,12 +96,14 @@ function normalizeState(saved) {
     classSettings: {},
     customClasses: [],
     classrooms: [],
+    announcements: [],
     scheduleEvents: [],
     scoreExams: [],
     ...saved,
   };
   next.customClasses = normalizeCustomClasses(next.customClasses);
   next.scoreExams = Array.isArray(next.scoreExams) ? next.scoreExams : [];
+  next.announcements = normalizeAnnouncements(next.announcements);
   next.classSettings = normalizeClassSettings(next.classSettings, next.customClasses);
   next.students = (next.students || []).map((student) => {
     const classInfo = getClassInfo(student.className);
@@ -198,6 +201,21 @@ function normalizeClassrooms(classrooms = []) {
     normalizedRoom.memberAccess = normalizeClassroomMemberAccess(room, memberStudentIds);
     return normalizedRoom;
   });
+}
+
+function normalizeAnnouncements(announcements = []) {
+  return (Array.isArray(announcements) ? announcements : []).map((announcement) => ({
+    id: announcement.id || crypto.randomUUID(),
+    scope: announcement.scope === "class" ? "class" : "all",
+    className: announcement.scope === "class" ? String(announcement.className || "").trim() : "",
+    category: String(announcement.category || "일반 안내").trim(),
+    title: String(announcement.title || "").trim(),
+    content: String(announcement.content || "").trim(),
+    startDate: normalizeDateValue(announcement.startDate) || "",
+    endDate: normalizeDateValue(announcement.endDate) || "",
+    createdAt: Number(announcement.createdAt || Date.now()),
+    updatedAt: Number(announcement.updatedAt || announcement.createdAt || Date.now()),
+  }));
 }
 
 function getClassroomPublicFlag(room = {}, fallback = false) {
@@ -420,12 +438,14 @@ async function syncStateFromServer() {
     const serverClassroomShape = JSON.stringify(serverState.classrooms || []);
     const localClassShape = JSON.stringify({ customClasses: state.customClasses || [], classSettings: state.classSettings || {} });
     const serverClassShape = JSON.stringify({ customClasses: serverState.customClasses || [], classSettings: serverState.classSettings || {} });
+    const localAnnouncementShape = JSON.stringify(state.announcements || []);
+    const serverAnnouncementShape = JSON.stringify(serverState.announcements || []);
 
     if (
       serverCount > localCount ||
       (localCount === 0 && serverCount > 0) ||
       (serverCount >= localCount && localStudentShape !== serverStudentShape) ||
-      (serverCount >= localCount && (localClassroomShape !== serverClassroomShape || localClassShape !== serverClassShape))
+      (serverCount >= localCount && (localClassroomShape !== serverClassroomShape || localClassShape !== serverClassShape || localAnnouncementShape !== serverAnnouncementShape))
     ) {
       syncingFromServer = true;
       state = serverState;
@@ -441,6 +461,7 @@ async function syncStateFromServer() {
       state.customClasses = normalizeCustomClasses([...(serverState.customClasses || []), ...(state.customClasses || [])]);
       state.classSettings = normalizeClassSettings({ ...(state.classSettings || {}), ...(serverState.classSettings || {}) }, state.customClasses);
       state.classrooms = mergeClassrooms(serverState.classrooms, state.classrooms);
+      state.announcements = mergeListById(serverState.announcements, state.announcements);
       state.classHomework = { ...(serverState.classHomework || {}), ...(state.classHomework || {}) };
       applyClassSettings();
       saveState({ localOnly: true });
@@ -508,6 +529,7 @@ function mergeImportedState(current, incoming) {
   merged.newConsultations = mergeListById(merged.newConsultations, imported.newConsultations);
   merged.waitlist = mergeListById(merged.waitlist, imported.waitlist);
   merged.classrooms = mergeClassrooms(merged.classrooms, imported.classrooms);
+  merged.announcements = mergeListById(merged.announcements, imported.announcements);
   return { state: merged, added, updated };
 }
 
@@ -716,6 +738,8 @@ function setup() {
   $("#classInput").innerHTML = regularClassOptions();
   $("#waitClass").innerHTML = classOptions();
   $("#waitNextClass").innerHTML = classOptions();
+  $("#announcementClassInput").innerHTML = classOptions();
+  $("#announcementStartDateInput").value = today();
   renderSpecialClassChecks();
   $("#classEditSelect").innerHTML = classEditOptions();
   $("#classSubjectInput").innerHTML = subjectChoices.map((subject) => `<option>${subject}</option>`).join("");
@@ -725,6 +749,7 @@ function setup() {
   renderYoutubeLinkRows([]);
   resetClassroomImageEditor();
   syncScheduleMoveFields();
+  syncAnnouncementScopeFields();
 
   bindEvents();
   renderAll();
@@ -816,6 +841,9 @@ function bindEvents() {
   $("#studentRoomLogoutBtn").addEventListener("click", logoutStudentRoom);
   $("#classRoomPreviewBtn").addEventListener("click", renderClassRoomPreview);
   $("#classRoomPreviewSelect").addEventListener("change", () => { currentClassPreviewRoomId = ""; renderClassRoomPreview(); });
+  $("#announcementScopeInput").addEventListener("change", syncAnnouncementScopeFields);
+  $("#saveAnnouncementBtn").addEventListener("click", saveAnnouncementFromForm);
+  $("#clearAnnouncementBtn").addEventListener("click", clearAnnouncementForm);
   $("#exportOnlineClassroomBtn").addEventListener("click", exportOnlineClassroom);
   $("#bulkStudentAccountsBtn").addEventListener("click", provisionUnissuedStudentAccounts);
   $("#resetMissingStudentPasswordsBtn").addEventListener("click", resetMissingStudentPasswords);
@@ -879,10 +907,108 @@ function renderAll() {
   renderConsulting();
   renderNewConsultations();
   renderWaitlist();
+  renderAnnouncements();
   renderClassroomStudentOptions();
   renderClassrooms();
   renderStudentClassroomView();
   renderScoreExams();
+}
+
+function syncAnnouncementScopeFields() {
+  const isClassNotice = $("#announcementScopeInput")?.value === "class";
+  if ($("#announcementClassWrap")) $("#announcementClassWrap").hidden = !isClassNotice;
+}
+
+function clearAnnouncementForm() {
+  $("#announcementIdInput").value = "";
+  $("#announcementScopeInput").value = "all";
+  $("#announcementCategoryInput").value = "일반 안내";
+  $("#announcementStartDateInput").value = today();
+  $("#announcementEndDateInput").value = "";
+  $("#announcementTitleInput").value = "";
+  $("#announcementContentInput").value = "";
+  $("#announcementEditorTitle").textContent = "공지사항 추가";
+  $("#saveAnnouncementBtn").textContent = "공지 저장";
+  syncAnnouncementScopeFields();
+}
+
+function saveAnnouncementFromForm() {
+  const id = $("#announcementIdInput").value || crypto.randomUUID();
+  const scope = $("#announcementScopeInput").value === "class" ? "class" : "all";
+  const className = scope === "class" ? $("#announcementClassInput").value : "";
+  const title = $("#announcementTitleInput").value.trim();
+  const content = $("#announcementContentInput").value.trim();
+  const startDate = $("#announcementStartDateInput").value;
+  const endDate = $("#announcementEndDateInput").value;
+  if (scope === "class" && !className) return alert("공지할 반을 선택해주세요.");
+  if (!title || !content || !startDate) return alert("게시 시작일, 제목과 내용을 입력해주세요.");
+  if (endDate && endDate < startDate) return alert("게시 종료일은 시작일보다 빠를 수 없습니다.");
+  const existing = (state.announcements || []).find((item) => item.id === id);
+  const announcement = {
+    id,
+    scope,
+    className,
+    category: $("#announcementCategoryInput").value || "일반 안내",
+    title,
+    content,
+    startDate,
+    endDate,
+    createdAt: existing?.createdAt || Date.now(),
+    updatedAt: Date.now(),
+  };
+  state.announcements = [...(state.announcements || []).filter((item) => item.id !== id), announcement];
+  saveState();
+  renderAnnouncements();
+  clearAnnouncementForm();
+  alert(existing ? "공지사항을 수정했습니다." : "공지사항을 저장했습니다.");
+}
+
+function editAnnouncement(id) {
+  const announcement = (state.announcements || []).find((item) => item.id === id);
+  if (!announcement) return;
+  navigateToView("announcements");
+  $("#announcementIdInput").value = announcement.id;
+  $("#announcementScopeInput").value = announcement.scope;
+  $("#announcementClassInput").value = announcement.className || classes[0]?.name || "";
+  $("#announcementCategoryInput").value = announcement.category || "일반 안내";
+  $("#announcementStartDateInput").value = announcement.startDate || today();
+  $("#announcementEndDateInput").value = announcement.endDate || "";
+  $("#announcementTitleInput").value = announcement.title;
+  $("#announcementContentInput").value = announcement.content;
+  $("#announcementEditorTitle").textContent = "공지사항 수정";
+  $("#saveAnnouncementBtn").textContent = "수정 저장";
+  syncAnnouncementScopeFields();
+  $(".announcement-editor-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function deleteAnnouncement(id) {
+  const announcement = (state.announcements || []).find((item) => item.id === id);
+  if (!announcement || !confirm(`${announcement.title} 공지를 삭제할까요?`)) return;
+  state.announcements = state.announcements.filter((item) => item.id !== id);
+  saveState();
+  renderAnnouncements();
+  if ($("#announcementIdInput").value === id) clearAnnouncementForm();
+}
+
+function announcementStatusInfo(announcement) {
+  const date = today();
+  if (announcement.startDate && announcement.startDate > date) return { key: "scheduled", label: "게시 예정" };
+  if (announcement.endDate && announcement.endDate < date) return { key: "ended", label: "게시 종료" };
+  return { key: "active", label: "게시 중" };
+}
+
+function renderAnnouncements() {
+  if (!$("#announcementList")) return;
+  const announcements = [...(state.announcements || [])].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+  $("#announcementCountLabel").textContent = `${announcements.length}개`;
+  $("#announcementList").innerHTML = announcements.length
+    ? announcements.map((announcement) => {
+        const status = announcementStatusInfo(announcement);
+        const scopeText = announcement.scope === "class" ? announcement.className : "학원 전체";
+        const period = `${announcement.startDate || "시작일 없음"} ~ ${announcement.endDate || "종료일 없음"}`;
+        return `<article class="announcement-card"><div><div class="announcement-card-heading"><span class="badge">${scoreEscape(announcement.category)}</span><span class="badge announcement-status ${status.key}">${status.label}</span><strong>${scoreEscape(announcement.title)}</strong></div><div class="announcement-card-meta">${scoreEscape(scopeText)} · ${scoreEscape(period)}</div></div><div class="announcement-card-actions"><button class="mini-button" type="button" onclick="editAnnouncement('${announcement.id}')">수정</button><button class="mini-button danger" type="button" onclick="deleteAnnouncement('${announcement.id}')">삭제</button></div><p class="announcement-card-content">${scoreEscape(announcement.content)}</p></article>`;
+      }).join("")
+    : `<div class="empty-state">아직 등록된 공지사항이 없습니다.</div>`;
 }
 
 function scoreEscape(value) {
@@ -1489,6 +1615,7 @@ function refreshClassControls() {
     classInput: $("#classInput")?.value,
     waitClass: $("#waitClass")?.value,
     waitNextClass: $("#waitNextClass")?.value,
+    announcementClassInput: $("#announcementClassInput")?.value,
     classEditSelect: $("#classEditSelect")?.value,
   };
 
@@ -1498,6 +1625,7 @@ function refreshClassControls() {
   $("#classInput").innerHTML = regularClassOptions();
   $("#waitClass").innerHTML = classOptions();
   $("#waitNextClass").innerHTML = classOptions();
+  $("#announcementClassInput").innerHTML = classOptions();
   $("#classEditSelect").innerHTML = classEditOptions();
 
   Object.entries(previous).forEach(([id, value]) => {
@@ -3883,6 +4011,20 @@ function buildOnlineStudentFiles(sourceState = state) {
             updatedAt: post.updatedAt || post.createdAt,
           })),
       })),
+      announcements: normalizeAnnouncements(sourceState.announcements || [])
+        .filter((announcement) => announcement.scope === "all" || getStudentClassNames(student).includes(announcement.className))
+        .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+        .map((announcement) => ({
+          id: announcement.id,
+          scope: announcement.scope,
+          className: announcement.className,
+          category: announcement.category,
+          title: announcement.title,
+          content: announcement.content,
+          startDate: announcement.startDate,
+          endDate: announcement.endDate,
+          updatedAt: announcement.updatedAt,
+        })),
       scores: (sourceState.scoreExams || [])
         .map((exam) => {
           const result = (exam.results || []).find((item) => item.studentId === student.id);

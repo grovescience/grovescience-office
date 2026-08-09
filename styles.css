@@ -1141,6 +1141,59 @@ td {
   font-size: 13px;
 }
 
+.announcement-form {
+  align-items: end;
+}
+
+.announcement-form .wide {
+  grid-column: 1 / -1;
+}
+
+.announcement-list {
+  display: grid;
+  gap: 10px;
+}
+
+.announcement-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+}
+
+.announcement-card-heading,
+.announcement-card-meta,
+.announcement-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.announcement-card-heading strong {
+  font-size: 17px;
+}
+
+.announcement-card-meta,
+.announcement-card-content {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.announcement-card-content {
+  grid-column: 1 / -1;
+  margin: 0;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.announcement-status.active { background: #e7f4ea; color: #28643d; }
+.announcement-status.scheduled { background: #eef3ff; color: #405ba3; }
+.announcement-status.ended { background: #f1f1ed; color: #73766d; }
+
 .waitlist-form {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -2184,6 +2237,7 @@ dialog::backdrop {
   .payment-row,
   .wait-card,
   .classroom-card,
+  .announcement-card,
   .panel-heading,
   .quick-form,
   .record-card {

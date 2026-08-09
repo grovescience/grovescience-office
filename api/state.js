@@ -32,6 +32,28 @@ function buildStudentScores(state, studentId) {
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 }
 
+function getStudentClassNames(student) {
+  return [...new Set([student.className, ...(student.specialClassNames || [])].filter(Boolean))];
+}
+
+function buildStudentAnnouncements(state, student) {
+  const classNames = getStudentClassNames(student);
+  return (state.announcements || [])
+    .filter((announcement) => announcement.scope !== "class" || classNames.includes(announcement.className))
+    .map((announcement) => ({
+      id: announcement.id,
+      scope: announcement.scope === "class" ? "class" : "all",
+      className: announcement.scope === "class" ? announcement.className || "" : "",
+      category: announcement.category || "일반 안내",
+      title: announcement.title || "공지사항",
+      content: announcement.content || "",
+      startDate: announcement.startDate || "",
+      endDate: announcement.endDate || "",
+      updatedAt: announcement.updatedAt || announcement.createdAt || Date.now(),
+    }))
+    .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+}
+
 function buildPortalPayload(state, student) {
   const classrooms = (state.classrooms || [])
     .filter((room) => isRoomOpenForStudent(room, student.id))
@@ -45,6 +67,7 @@ function buildPortalPayload(state, student) {
     }));
   return {
     student: { id: student.id, name: student.name, grade: student.grade, className: student.className },
+    announcements: buildStudentAnnouncements(state, student),
     classrooms,
     scores: buildStudentScores(state, student.id),
     updatedAt: new Date().toISOString(),

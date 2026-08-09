@@ -62,6 +62,7 @@
           <details class="nav-group" open>
             <summary>과수원ON</summary>
             <div class="nav-submenu">
+              <button class="nav-item" data-view="announcements">공지사항 관리</button>
               <button class="nav-item" data-view="classroomAdmin">과수원ON 관리</button>
               <button class="nav-item" data-view="classroomStudent">미리보기</button>
             </div>
@@ -401,6 +402,48 @@
             </div>
             <div class="helper-line">기본은 전체 반의 미납자입니다. 필요하면 반이나 상태를 바꿔서 보고, 체크하면 납부완료로 저장됩니다.</div>
             <div class="payment-list" id="paymentList"></div>
+          </section>
+        </section>
+
+        <section class="view" id="announcements">
+          <div class="notice">
+            <strong>과수원ON 로그인 후 학생에게 먼저 보이는 공지입니다</strong>
+            <span>전체 공지는 모든 학생에게, 반별 공지는 해당 정규반·특강반 학생에게만 표시됩니다. 게시 기간도 설정할 수 있습니다.</span>
+          </div>
+
+          <section class="panel announcement-editor-panel">
+            <div class="panel-heading">
+              <div>
+                <h2 id="announcementEditorTitle">공지사항 추가</h2>
+                <span>학원 전체 안내 또는 반별 시험·휴강 일정을 작성합니다.</span>
+              </div>
+            </div>
+            <div class="inline-form announcement-form">
+              <input id="announcementIdInput" type="hidden" />
+              <label class="field-label">공개 범위
+                <select id="announcementScopeInput"><option value="all">학원 전체</option><option value="class">반별 공지</option></select>
+              </label>
+              <label class="field-label" id="announcementClassWrap" hidden>대상 반
+                <select id="announcementClassInput"></select>
+              </label>
+              <label class="field-label">공지 유형
+                <select id="announcementCategoryInput"><option>일반 안내</option><option>학원 방학</option><option>시험 일정</option><option>휴강 안내</option><option>일정 변경</option><option>준비물</option><option>기타</option></select>
+              </label>
+              <label class="field-label">게시 시작일<input id="announcementStartDateInput" type="date" /></label>
+              <label class="field-label">게시 종료일(선택)<input id="announcementEndDateInput" type="date" /></label>
+              <label class="field-label wide">제목<input id="announcementTitleInput" placeholder="예: 여름방학 휴원 안내" /></label>
+              <label class="field-label wide">내용<textarea id="announcementContentInput" rows="5" placeholder="학생들이 확인할 공지 내용을 입력하세요"></textarea></label>
+              <button class="primary-button" id="saveAnnouncementBtn" type="button">공지 저장</button>
+              <button class="ghost-button" id="clearAnnouncementBtn" type="button">새 공지</button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div><h2>공지사항 목록</h2><span>게시 예정·게시 중·종료 공지를 모두 보관합니다.</span></div>
+              <span id="announcementCountLabel">0개</span>
+            </div>
+            <div class="announcement-list" id="announcementList"></div>
           </section>
         </section>
 

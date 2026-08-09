@@ -242,12 +242,29 @@ function renderStudentRoom() {
       renderStudentRoom();
     });
   });
+  renderStudentAnnouncements();
   renderStudentScores();
   renderPosts();
 }
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '\"': "&quot;" }[char]));
+}
+
+function renderStudentAnnouncements() {
+  const date = new Date();
+  const todayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const announcements = (Array.isArray(currentStudentData?.announcements) ? currentStudentData.announcements : [])
+    .filter((item) => (!item.startDate || item.startDate <= todayKey) && (!item.endDate || item.endDate >= todayKey))
+    .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+  $("#announcementCountLabel").textContent = `${announcements.length}개`;
+  $("#studentAnnouncementList").innerHTML = announcements.length
+    ? announcements.map((item) => {
+        const scopeText = item.scope === "class" ? item.className || "반별 공지" : "학원 전체";
+        const period = item.endDate ? `${item.startDate || ""} ~ ${item.endDate}` : item.startDate || "";
+        return `<article class="student-announcement-card ${item.scope === "class" ? "class-notice" : "global-notice"}"><div class="student-announcement-head"><div><span class="announcement-scope">${escapeHtml(scopeText)}</span><span class="badge">${escapeHtml(item.category || "일반 안내")}</span></div><small>${escapeHtml(period)}</small></div><strong>${escapeHtml(item.title || "공지사항")}</strong><p>${escapeHtml(item.content || "")}</p></article>`;
+      }).join("")
+    : `<div class="empty">현재 확인할 공지사항이 없습니다.</div>`;
 }
 
 function renderStudentScores() {
