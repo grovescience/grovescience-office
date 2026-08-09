@@ -142,10 +142,18 @@
               <label class="field-label">시작일<input id="scheduleDateInput" type="date" /></label>
               <label class="field-label">종료일(선택)<input id="scheduleEndDateInput" type="date" /></label>
               <label class="field-label">구분<select id="scheduleTypeInput"><option>학원 행사</option><option>상담</option><option>개인 일정</option><option>학원 휴무</option><option>학원 방학</option><option>학교 개학</option><option>학교 방학</option><option>학교 시험기간</option><option>학교 행사</option><option>휴강</option><option>수업 취소</option><option>보강</option><option>기타</option></select></label>
+              <label class="field-label" id="scheduleRepeatField" hidden>개인일정 반복<select id="scheduleRepeatInput"><option value="none">반복 안 함</option><option value="weekly">매주 반복(시작일 요일)</option><option value="custom">특정 요일 반복</option></select></label>
               <label class="field-label">시작시간<input id="scheduleTimeInput" type="time" /></label>
               <label class="field-label">종료시간<input id="scheduleEndTimeInput" type="time" /></label>
               <label class="field-label">일정명<input id="scheduleTitleInput" placeholder="예: 동부고 여름방학" /></label>
               <label class="field-label wide">메모<input id="scheduleMemoInput" placeholder="선택 사항" /></label>
+              <div class="schedule-repeat-days" id="scheduleRepeatDays" hidden>
+                <strong>반복 요일</strong>
+                <div>
+                  <label><input type="checkbox" value="0" />일</label><label><input type="checkbox" value="1" />월</label><label><input type="checkbox" value="2" />화</label><label><input type="checkbox" value="3" />수</label><label><input type="checkbox" value="4" />목</label><label><input type="checkbox" value="5" />금</label><label><input type="checkbox" value="6" />토</label>
+                </div>
+                <span>종료일을 비워두면 계속 반복됩니다.</span>
+              </div>
               <div class="schedule-move-fields" id="scheduleMoveFields" hidden>
                 <strong>보강 이동 일정</strong>
                 <label class="field-label">보강일<input id="scheduleMoveDateInput" type="date" /></label>

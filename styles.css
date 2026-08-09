@@ -2258,7 +2258,7 @@ dialog::backdrop {
 .calendar-closed { background: #fff0ef; color: #a33c32; font-weight: 800; }
 .calendar-makeup { background: #eef2ff; color: #4056a1; font-weight: 800; }
 .calendar-more { color: var(--muted); font-weight: 800; }
-.schedule-editor { display: grid; grid-template-columns: 135px 135px 140px 105px 105px minmax(160px, 1fr) minmax(150px, 1fr) auto; gap: 10px; align-items: end; margin-top: 18px; }
+.schedule-editor { display: grid; grid-template-columns: 125px 125px 130px 155px 100px 100px minmax(150px, 1fr) minmax(140px, 1fr) auto; gap: 10px; align-items: end; margin-top: 18px; }
 .schedule-editor .wide { grid-column: auto; }
 .schedule-editor-actions, .schedule-agenda-actions { display: flex; gap: 8px; align-items: center; }
 .schedule-editor-actions { align-items: stretch; flex-direction: column; }
@@ -2267,6 +2267,13 @@ dialog::backdrop {
 .schedule-move-fields[hidden] { display: none; }
 .schedule-move-fields > strong { align-self: center; color: #4056a1; }
 .schedule-move-fields > span { align-self: center; color: var(--muted); font-size: 13px; }
+.schedule-repeat-days { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #efcddd; border-radius: 9px; background: #fff7fa; }
+.schedule-repeat-days[hidden] { display: none; }
+.schedule-repeat-days > strong { color: #a34668; font-size: 13px; }
+.schedule-repeat-days > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.schedule-repeat-days label { display: flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 9px; border: 1px solid #efcddd; border-radius: 8px; background: #fff; color: #7f3653; font-weight: 800; cursor: pointer; }
+.schedule-repeat-days input { width: 16px; height: 16px; margin: 0; }
+.schedule-repeat-days > span { color: var(--muted); font-size: 12px; }
 .schedule-agenda { margin-top: 16px; display: grid; gap: 8px; }
 .schedule-agenda h3 { margin: 0 0 4px; }
 .schedule-agenda article { display: grid; grid-template-columns: auto 115px minmax(160px, 1fr) minmax(120px, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; }
