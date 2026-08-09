@@ -112,6 +112,8 @@ function normalizeState(saved) {
       homeworkStatus: "확인 전",
       classroomCode: "",
       specialClassNames: [],
+      previousClassName: "",
+      previousSpecialClassNames: [],
       enrollmentDate: "",
       withdrawalDate: "",
       subject: classInfo?.subject || "",
@@ -123,6 +125,10 @@ function normalizeState(saved) {
     normalized.specialClassNames = Array.isArray(normalized.specialClassNames)
       ? [...new Set(normalized.specialClassNames.filter(Boolean))].filter((name) => name !== normalized.className)
       : [];
+    normalized.previousSpecialClassNames = Array.isArray(normalized.previousSpecialClassNames)
+      ? [...new Set(normalized.previousSpecialClassNames.filter(Boolean))]
+      : [];
+    if (normalized.status === "퇴원") return archiveStudentClassesForRetirement(normalized, normalized.withdrawalDate || "", normalized.retiredReason || "");
     return normalized;
   });
   next.consulting = next.consulting || {};
@@ -421,7 +427,11 @@ async function syncStateFromServer() {
     const accessToken = data?.session?.access_token || "";
     const response = await fetch("./api/state", { cache: "no-store", headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} });
     if (!response.ok) return;
-    const serverState = normalizeState(await response.json());
+    const rawServerState = await response.json();
+    const retiredClassMigrationNeeded = (rawServerState.students || []).some((student) =>
+      student.status === "퇴원" && Boolean(student.className || (student.specialClassNames || []).length),
+    );
+    const serverState = normalizeState(rawServerState);
     const localCount = state.students.length;
     const serverCount = serverState.students.length;
     const localStudentShape = JSON.stringify((state.students || []).map((student) => ({
@@ -458,6 +468,7 @@ async function syncStateFromServer() {
       refreshClassControls();
       renderAll();
       syncingFromServer = false;
+      if (retiredClassMigrationNeeded) queueServerSave();
       return;
     }
 
@@ -471,6 +482,7 @@ async function syncStateFromServer() {
       saveState({ localOnly: true });
       queueServerSave();
     }
+    if (retiredClassMigrationNeeded) queueServerSave();
   } catch (error) {
     // 서버 저장을 사용할 수 없는 환경에서는 기존 브라우저 저장을 사용합니다.
   } finally {
@@ -704,11 +716,39 @@ function getStudentClassNames(student) {
   return [...new Set([student.className, ...(student.specialClassNames || [])].filter(Boolean))];
 }
 
+function getPreviousStudentClassNames(student) {
+  return [...new Set([student.previousClassName, ...(student.previousSpecialClassNames || [])].filter(Boolean))];
+}
+
+function archiveStudentClassesForRetirement(student, withdrawalDate = today(), retiredReason = "개별 퇴원 처리") {
+  const currentRegularClass = student.className || student.previousClassName || "";
+  const currentSpecialClasses = [...new Set([
+    ...(student.previousSpecialClassNames || []),
+    ...(student.specialClassNames || []),
+  ].filter(Boolean))];
+  return {
+    ...student,
+    className: "",
+    specialClassNames: [],
+    previousClassName: currentRegularClass,
+    previousSpecialClassNames: currentSpecialClasses,
+    status: "퇴원",
+    withdrawalDate: withdrawalDate || today(),
+    retiredAt: student.retiredAt || Date.now(),
+    retiredReason: retiredReason || student.retiredReason || "개별 퇴원 처리",
+  };
+}
+
 function studentBelongsToClass(student, className) {
   return className === "전체" || getStudentClassNames(student).includes(className);
 }
 
 function formatStudentClasses(student) {
+  if (student.status === "퇴원" && !getStudentClassNames(student).length) {
+    const previousRegular = student.previousClassName || "정규반 없음";
+    const previousSpecials = student.previousSpecialClassNames || [];
+    return `<div class="class-stack"><strong>퇴원 전 · ${previousRegular}</strong>${previousSpecials.map((name) => `<span class="special-class-label">퇴원 전 특강 · ${name}</span>`).join("")}</div>`;
+  }
   const regular = student.className && !isSpecialClassName(student.className) ? student.className : "정규반 없음";
   const specials = [...new Set([...(student.specialClassNames || []), ...(isSpecialClassName(student.className) ? [student.className] : [])])];
   return `<div class="class-stack"><strong>${regular}</strong>${specials.map((name) => `<span class="special-class-label">특강 · ${name}</span>`).join("")}</div>`;
@@ -1682,7 +1722,7 @@ function renderClassCards(type) {
 }
 
 function renderClassCard(item, ended = false) {
-  const count = state.students.filter((student) => studentBelongsToClass(student, item.name)).length;
+  const count = state.students.filter((student) => student.status !== "퇴원" && studentBelongsToClass(student, item.name)).length;
   const autoEnded = ended && hasClassPeriodEnded(item);
   const specialStatus = item.startDate && today() < item.startDate ? " · 개강 전" : autoEnded ? " · 자동 종강" : "";
   const periodText = item.type === "방학특강" && (item.startDate || item.endDate)
@@ -1706,7 +1746,7 @@ function renderClassCard(item, ended = false) {
 }
 
 function openClassStudentList(className) {
-  const students = sortStudentsByGradeName(state.students.filter((student) => studentBelongsToClass(student, className)));
+  const students = sortStudentsByGradeName(state.students.filter((student) => student.status !== "퇴원" && studentBelongsToClass(student, className)));
   openMemberDialog(`${className} 학생 명단`, students);
 }
 
@@ -1805,9 +1845,11 @@ function filteredStudents() {
   const status = $("#statusFilter").value;
 
   return state.students.filter((student) => {
-    const searchable = `${student.name} ${student.school} ${student.grade} ${getStudentClassNames(student).join(" ")} ${student.book} ${student.homework}`.toLowerCase();
+    const searchable = `${student.name} ${student.school} ${student.grade} ${getStudentClassNames(student).join(" ")} ${getPreviousStudentClassNames(student).join(" ")} ${student.book} ${student.homework}`.toLowerCase();
     const matchesKeyword = !keyword || searchable.includes(keyword);
-    const matchesClass = studentBelongsToClass(student, className);
+    const matchesClass = student.status === "퇴원"
+      ? className === "전체" || getPreviousStudentClassNames(student).includes(className)
+      : studentBelongsToClass(student, className);
     const matchesList = selectedStudentList === "retired"
       ? student.status === "퇴원"
       : selectedStudentList === "paused"
@@ -1867,15 +1909,16 @@ function finishSelectedSpecialClass() {
     const nextRegularClass = student.className === className ? "" : student.className;
     const nextSpecialClasses = (student.specialClassNames || []).filter((name) => name !== className);
     const hasOtherClass = [nextRegularClass, ...nextSpecialClasses].some(Boolean);
-    return {
+    const nextStudent = {
       ...student,
       className: nextRegularClass,
       specialClassNames: nextSpecialClasses,
-      status: hasOtherClass ? student.status : "퇴원",
-      withdrawalDate: hasOtherClass ? student.withdrawalDate : today(),
-      retiredAt: hasOtherClass ? student.retiredAt : Date.now(),
-      retiredReason: hasOtherClass ? student.retiredReason : `${className} 특강 종료`,
     };
+    return hasOtherClass ? nextStudent : archiveStudentClassesForRetirement(
+      { ...student, previousSpecialClassNames: [...new Set([...(student.previousSpecialClassNames || []), className])] },
+      today(),
+      `${className} 특강 종료`,
+    );
   });
   saveState();
   renderAll();
@@ -4176,16 +4219,20 @@ function fillClassDefaults() {
 function openStudentDialog(studentId = "") {
   renderSchoolOptions();
   const student = state.students.find((item) => item.id === studentId);
-  const classInfo = student?.className ? getClassInfo(student.className) : null;
-  $("#classInput").innerHTML = regularClassOptions(true, student?.className || "");
-  const inheritedSpecials = [...new Set([...(student?.specialClassNames || []), ...(student?.className && isSpecialClassName(student.className) ? [student.className] : [])])];
+  const editableClassName = student?.className || (student?.status === "퇴원" ? student?.previousClassName : "") || "";
+  const editableSpecialClasses = (student?.specialClassNames || []).length
+    ? student.specialClassNames
+    : (student?.status === "퇴원" ? student?.previousSpecialClassNames || [] : []);
+  const classInfo = editableClassName ? getClassInfo(editableClassName) : null;
+  $("#classInput").innerHTML = regularClassOptions(true, editableClassName);
+  const inheritedSpecials = [...new Set([...(editableSpecialClasses || []), ...(editableClassName && isSpecialClassName(editableClassName) ? [editableClassName] : [])])];
   renderSpecialClassChecks(inheritedSpecials);
   $("#dialogTitle").textContent = student ? "학생 정보 수정" : "학생 추가";
   $("#studentId").value = student?.id || "";
   $("#nameInput").value = student?.name || "";
   $("#schoolInput").value = student?.school || "";
   $("#gradeInput").value = student?.grade || "초3";
-  $("#classInput").value = student?.className && !isSpecialClassName(student.className) ? student.className : "";
+  $("#classInput").value = editableClassName && !isSpecialClassName(editableClassName) ? editableClassName : "";
   $("#studentPhoneInput").value = student?.studentPhone || "";
   $("#parentPhoneInput").value = student?.parentPhone || "";
   $("#classroomCodeInput").value = student?.classroomCode || "";
@@ -4209,42 +4256,25 @@ function syncStudentStatusDates() {
   }
 }
 
-function isSpecialClassroomForStudent(room, student) {
-  if (isSpecialClassName(room?.name)) return true;
-  return (student?.specialClassNames || []).some((className) =>
-    room?.name === className || String(room?.name || "").includes(className) || className.includes(String(room?.name || "")),
-  );
-}
-
-function removeStudentFromRegularClassrooms(student) {
-  if (!student?.id) return 0;
-  let removedCount = 0;
-  state.classrooms = (state.classrooms || []).map((room) => {
-    if (!(room.memberStudentIds || []).includes(student.id) || isSpecialClassroomForStudent(room, student)) return room;
-    const memberAccess = { ...(room.memberAccess || {}) };
-    delete memberAccess[student.id];
-    removedCount += 1;
-    return { ...room, memberStudentIds: room.memberStudentIds.filter((id) => id !== student.id), memberAccess, updatedAt: Date.now() };
-  });
-  return removedCount;
-}
-
 async function saveStudentFromForm() {
   const id = $("#studentId").value || crypto.randomUUID();
   const existing = state.students.find((student) => student.id === id);
-  const classInfo = getClassInfo($("#classInput").value);
+  const selectedClassName = $("#classInput").value;
+  const classInfo = getClassInfo(selectedClassName);
   const existingCodes = getClassroomCodeSet(id);
   const enteredClassroomCode = $("#classroomCodeInput").value.trim().toUpperCase();
   const classroomCode = enteredClassroomCode || existing?.classroomCode || generateClassroomCode(existingCodes);
   const specialClassNames = $$("#specialClassChecks input:checked").map((input) => input.value);
   const selectedStudentStatus = $("#statusInput").value;
-  const student = {
+  let student = {
     id,
     name: $("#nameInput").value.trim(),
     school: $("#schoolInput").value.trim(),
     grade: $("#gradeInput").value,
-    className: $("#classInput").value,
+    className: selectedClassName,
     specialClassNames,
+    previousClassName: existing?.previousClassName || "",
+    previousSpecialClassNames: existing?.previousSpecialClassNames || [],
     studentPhone: $("#studentPhoneInput").value.trim(),
     parentPhone: $("#parentPhoneInput").value.trim(),
     classroomCode,
@@ -4262,15 +4292,15 @@ async function saveStudentFromForm() {
     createdAt: existing?.createdAt || Date.now(),
   };
 
+  if (selectedStudentStatus === "퇴원") {
+    student = archiveStudentClassesForRetirement(student, student.withdrawalDate, existing?.retiredReason || "개별 퇴원 처리");
+  }
+
   if (!student.name) return;
   if (existing) {
     state.students = state.students.map((item) => (item.id === id ? student : item));
   } else {
     state.students.push(student);
-  }
-
-  if (selectedStudentStatus === "퇴원" && existing?.status !== "퇴원") {
-    removeStudentFromRegularClassrooms(student);
   }
 
   saveState();
@@ -4301,10 +4331,9 @@ async function saveStudentFromForm() {
 
 function retireStudent(studentId) {
   const student = state.students.find((item) => item.id === studentId);
-  if (!student || !confirm(`${student.name} 학생을 퇴원생 명단으로 옮길까요?\n\n정규반 과수원ON에서는 즉시 제외되고, 특강반 과수원ON 이용권한은 유지됩니다.\n출석·납부·상담 기록도 그대로 유지됩니다.`)) return;
-  const retiredStudent = { ...student, status: "퇴원", withdrawalDate: today(), retiredAt: Date.now(), retiredReason: "개별 퇴원 처리" };
+  if (!student || !confirm(`${student.name} 학생을 퇴원생 명단으로 옮길까요?\n\n정규반·특강반 소속에서는 빠지고 이전 반 정보는 복구용으로 보관됩니다.\n과수원ON 권한은 삭제하지 않으므로 과수원ON 관리에서 학생별 종료일을 직접 설정할 수 있습니다.\n출석·납부·상담 기록도 그대로 유지됩니다.`)) return;
+  const retiredStudent = archiveStudentClassesForRetirement(student, today(), "개별 퇴원 처리");
   state.students = state.students.map((item) => item.id === studentId ? retiredStudent : item);
-  removeStudentFromRegularClassrooms(retiredStudent);
   saveState();
   renderAll();
 }
@@ -4312,7 +4341,15 @@ function retireStudent(studentId) {
 function restoreStudent(studentId) {
   const student = state.students.find((item) => item.id === studentId);
   if (!student || !confirm(`${student.name} 학생을 재원생 명단으로 복구할까요?`)) return;
-  state.students = state.students.map((item) => item.id === studentId ? { ...item, status: "재원", withdrawalDate: "", restoredAt: Date.now(), retiredReason: "" } : item);
+  state.students = state.students.map((item) => item.id === studentId ? {
+    ...item,
+    className: item.previousClassName || "",
+    specialClassNames: [...(item.previousSpecialClassNames || [])],
+    status: "재원",
+    withdrawalDate: "",
+    restoredAt: Date.now(),
+    retiredReason: "",
+  } : item);
   saveState();
   renderAll();
 }
