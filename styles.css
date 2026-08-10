@@ -679,6 +679,10 @@ td {
   display: none;
 }
 
+.regular-class-cycle-field[hidden] {
+  display: none;
+}
+
 .special-class-period {
   display: inline-flex;
   margin-top: 7px;
@@ -2302,6 +2306,8 @@ dialog::backdrop {
 .schedule-agenda-makeup { background: #f7f8ff; border-color: #d7def5 !important; }
 .schedule-agenda-personal { background: #fff7fa; border-color: #efcddd !important; }
 .schedule-agenda-vacation { background: #f3f8ff; border-color: #bfd6f3 !important; }
+.class-schedule-move-dialog-card { width: min(760px, calc(100vw - 32px)); }
+.class-schedule-move-summary { margin: 0 0 16px; padding: 12px 14px; border: 1px solid #d7def5; border-radius: 10px; background: #f7f8ff; color: #4056a1; font-weight: 800; }
 
 @media (max-width: 980px) {
   .schedule-editor { grid-template-columns: 1fr 1fr; }

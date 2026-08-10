@@ -360,6 +360,17 @@
                 특강 종강일
                 <input id="classEndDateInput" type="date" />
               </label>
+              <label class="field-label regular-class-cycle-field" id="classCycleStartDateField">
+                1회차 시작일
+                <input id="classCycleStartDateInput" type="date" />
+              </label>
+              <label class="field-label regular-class-cycle-field" id="classCycleLengthField">
+                회차 구성
+                <select id="classCycleLengthInput">
+                  <option value="4">기본 4회차</option>
+                  <option value="8">방학 집중 8회차</option>
+                </select>
+              </label>
               <label class="field-label">
                 과목
                 <select id="classSubjectInput"></select>
@@ -427,12 +438,16 @@
               <option value="2">2회차</option>
               <option value="3">3회차</option>
               <option value="4">4회차</option>
+              <option value="5">5회차</option>
+              <option value="6">6회차</option>
+              <option value="7">7회차</option>
+              <option value="8">8회차</option>
             </select>
           </div>
           <section class="panel">
             <div class="panel-heading">
               <h2>출석 체크</h2>
-              <span>4회 단위로 저장되고, 결석이면 보강일자를 적을 수 있습니다.</span>
+              <span>반관리에서 설정한 4회 또는 8회 단위로 계산되고, 결석이면 보강일자를 적을 수 있습니다.</span>
             </div>
             <div class="attendance-list" id="attendanceList"></div>
           </section>
@@ -1172,6 +1187,29 @@
             </thead>
             <tbody id="memberDialogTable"></tbody>
           </table>
+        </div>
+      </div>
+    </dialog>
+    <dialog id="classScheduleMoveDialog">
+      <div class="dialog-card class-schedule-move-dialog-card">
+        <div class="dialog-heading">
+          <div>
+            <h2>정규반 수업 변경</h2>
+            <p>선택한 회차를 다른 날짜와 시간으로 옮깁니다. 회차 번호는 그대로 유지됩니다.</p>
+          </div>
+          <button class="icon-button" id="closeClassScheduleMoveBtn" aria-label="닫기" type="button">×</button>
+        </div>
+        <div class="class-schedule-move-summary" id="classScheduleMoveSummary"></div>
+        <div class="form-grid">
+          <label>원래 수업일<input id="classScheduleOriginalDateInput" type="date" readonly /></label>
+          <label>변경 수업일<input id="classScheduleMoveDateInput" type="date" /></label>
+          <label>변경 시작<input id="classScheduleMoveTimeInput" type="time" /></label>
+          <label>변경 종료<input id="classScheduleMoveEndTimeInput" type="time" /></label>
+          <label class="wide">메모<input id="classScheduleMoveMemoInput" placeholder="예: 학원 방학으로 8월 19일에 진행" /></label>
+        </div>
+        <div class="dialog-actions">
+          <button class="ghost-button" id="cancelClassScheduleMoveBtn" type="button">취소</button>
+          <button class="primary-button" id="saveClassScheduleMoveBtn" type="button">수업 변경 저장</button>
         </div>
       </div>
     </dialog>
