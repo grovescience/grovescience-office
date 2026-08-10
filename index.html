@@ -365,11 +365,16 @@
                 <input id="classCycleStartDateInput" type="date" />
               </label>
               <label class="field-label regular-class-cycle-field" id="classCycleLengthField">
-                회차 구성
+                전체 회차
                 <select id="classCycleLengthInput">
                   <option value="4">기본 4회차</option>
                   <option value="8">방학 집중 8회차</option>
+                  <option value="custom">기타 직접 입력</option>
                 </select>
+              </label>
+              <label class="field-label regular-class-cycle-field" id="classCustomCycleLengthField" hidden>
+                기타 전체 회차
+                <input id="classCustomCycleLengthInput" type="number" min="1" max="60" placeholder="예: 6" />
               </label>
               <label class="field-label">
                 과목
@@ -1210,6 +1215,27 @@
         <div class="dialog-actions">
           <button class="ghost-button" id="cancelClassScheduleMoveBtn" type="button">취소</button>
           <button class="primary-button" id="saveClassScheduleMoveBtn" type="button">수업 변경 저장</button>
+        </div>
+      </div>
+    </dialog>
+    <dialog id="studentCycleDialog">
+      <div class="dialog-card class-schedule-move-dialog-card">
+        <div class="dialog-heading">
+          <div>
+            <h2>학생 개인 회차 수정</h2>
+            <p>중간 입회 등으로 반 전체 회차와 다를 때 이 학생의 기준 회차만 바꿉니다.</p>
+          </div>
+          <button class="icon-button" id="closeStudentCycleBtn" aria-label="닫기" type="button">×</button>
+        </div>
+        <div class="class-schedule-move-summary" id="studentCycleSummary"></div>
+        <div class="form-grid">
+          <label>기준일<input id="studentCycleDateInput" type="date" readonly /></label>
+          <label>이 학생의 회차<input id="studentCycleRoundInput" type="number" min="1" max="60" /></label>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary-button" id="resetStudentCycleBtn" type="button">반 전체 회차로 되돌리기</button>
+          <button class="ghost-button" id="cancelStudentCycleBtn" type="button">취소</button>
+          <button class="primary-button" id="saveStudentCycleBtn" type="button">개인 회차 저장</button>
         </div>
       </div>
     </dialog>

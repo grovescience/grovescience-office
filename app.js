@@ -49,6 +49,7 @@ let currentClassPreviewRoomId = "";
 let currentAdminClassroomRoomId = "";
 let showAllRecentClassroomPosts = false;
 let editingClassScheduleMoveId = "";
+let editingStudentCycleId = "";
 let classroomImageDraft = [];
 let pendingClassroomImageFiles = [];
 let classroomImagesMarkedForDeletion = new Set();
@@ -70,6 +71,7 @@ function createInitialState() {
     students: sampleStudents.map((student) => ({ ...student })),
     attendance: {},
     attendanceCycleAnchors: {},
+    studentCycleAnchors: {},
     payments: {},
     consulting: {},
     newConsultations: [],
@@ -91,6 +93,7 @@ function normalizeState(saved) {
     students: [],
     attendance: {},
     attendanceCycleAnchors: {},
+    studentCycleAnchors: {},
     attendanceSessions: {},
     payments: {},
     consulting: {},
@@ -108,6 +111,7 @@ function normalizeState(saved) {
     ...saved,
   };
   next.customClasses = normalizeCustomClasses(next.customClasses);
+  next.studentCycleAnchors = next.studentCycleAnchors && typeof next.studentCycleAnchors === "object" ? next.studentCycleAnchors : {};
   next.scoreExams = Array.isArray(next.scoreExams) ? next.scoreExams : [];
   next.announcements = normalizeAnnouncements(next.announcements);
   next.classSettings = normalizeClassSettings(next.classSettings, next.customClasses);
@@ -386,12 +390,17 @@ function normalizeClassSettings(settings = {}, customClasses = state?.customClas
       startDate: String(item.startDate || classInfo.startDate || ""),
       endDate: String(item.endDate || classInfo.endDate || ""),
       cycleStartDate: normalizeDateValue(item.cycleStartDate || classInfo.cycleStartDate) || "",
-      cycleLength: Number(item.cycleLength || classInfo.cycleLength || 4) === 8 ? 8 : 4,
+      cycleLength: normalizeCycleLength(item.cycleLength || classInfo.cycleLength || 4),
       manuallyEnded: Boolean(item.manuallyEnded),
       endedAt: normalizeDateValue(item.endedAt) || "",
     };
     return saved;
   }, {});
+}
+
+function normalizeCycleLength(value, fallback = 4) {
+  const number = Math.round(Number(value));
+  return Number.isFinite(number) && number >= 1 && number <= 60 ? number : fallback;
 }
 
 function applyClassSettings(settings = state?.classSettings || {}, customSource = state?.customClasses || []) {
@@ -414,7 +423,7 @@ function normalizeCustomClasses(customClasses = []) {
       startDate: String(classInfo.startDate || ""),
       endDate: String(classInfo.endDate || ""),
       cycleStartDate: normalizeDateValue(classInfo.cycleStartDate) || "",
-      cycleLength: Number(classInfo.cycleLength || 4) === 8 ? 8 : 4,
+      cycleLength: normalizeCycleLength(classInfo.cycleLength || 4),
       manuallyEnded: Boolean(classInfo.manuallyEnded),
       endedAt: normalizeDateValue(classInfo.endedAt) || "",
       custom: true,
@@ -567,6 +576,13 @@ async function syncStateFromServer() {
     const serverAnnouncementShape = JSON.stringify(serverState.announcements || []);
     const localScheduleShape = JSON.stringify({ events: state.scheduleEvents || [], tombstones: state.scheduleEventTombstones || {} });
     const serverScheduleShape = JSON.stringify({ events: serverState.scheduleEvents || [], tombstones: serverState.scheduleEventTombstones || {} });
+    const localStudentCycleShape = JSON.stringify(state.studentCycleAnchors || {});
+    const serverStudentCycleShape = JSON.stringify(serverState.studentCycleAnchors || {});
+    const mergedStudentCycles = mergeStudentCycleAnchors(serverState.studentCycleAnchors, state.studentCycleAnchors);
+    state.studentCycleAnchors = mergedStudentCycles;
+    serverState.studentCycleAnchors = mergedStudentCycles;
+    const localStudentCyclesRecovered = localStudentCycleShape !== JSON.stringify(mergedStudentCycles);
+    const serverStudentCyclesRecovered = serverStudentCycleShape !== JSON.stringify(mergedStudentCycles);
     const mergedSchedules = mergeScheduleEventState(serverState, state);
     state.scheduleEvents = mergedSchedules.events;
     state.scheduleEventTombstones = mergedSchedules.tombstones;
@@ -588,7 +604,7 @@ async function syncStateFromServer() {
       refreshClassControls();
       renderAll();
       syncingFromServer = false;
-      if (retiredClassMigrationNeeded || serverCredentialsRecovered || serverSchedulesRecovered) queueServerSave();
+      if (retiredClassMigrationNeeded || serverCredentialsRecovered || serverSchedulesRecovered || serverStudentCyclesRecovered) queueServerSave();
       return;
     }
 
@@ -610,7 +626,7 @@ async function syncStateFromServer() {
       saveState({ localOnly: true });
       renderScheduleCalendar();
     }
-    if (retiredClassMigrationNeeded || serverCredentialsRecovered || serverSchedulesRecovered) queueServerSave();
+    if (retiredClassMigrationNeeded || serverCredentialsRecovered || serverSchedulesRecovered || localStudentCyclesRecovered || serverStudentCyclesRecovered) queueServerSave();
   } catch (error) {
     // 서버 저장을 사용할 수 없는 환경에서는 기존 브라우저 저장을 사용합니다.
   } finally {
@@ -636,6 +652,24 @@ function mergeRecordGroups(current = {}, incoming = {}) {
     },
     { ...current },
   );
+}
+
+function mergeStudentCycleAnchors(left = {}, right = {}) {
+  const merged = {};
+  const studentIds = new Set([...Object.keys(left || {}), ...Object.keys(right || {})]);
+  studentIds.forEach((studentId) => {
+    const classNames = new Set([...Object.keys(left?.[studentId] || {}), ...Object.keys(right?.[studentId] || {})]);
+    merged[studentId] = {};
+    classNames.forEach((className) => {
+      const leftAnchor = left?.[studentId]?.[className];
+      const rightAnchor = right?.[studentId]?.[className];
+      merged[studentId][className] = Number(rightAnchor?.updatedAt || 0) >= Number(leftAnchor?.updatedAt || 0)
+        ? rightAnchor || leftAnchor
+        : leftAnchor || rightAnchor;
+    });
+    if (!Object.keys(merged[studentId]).length) delete merged[studentId];
+  });
+  return merged;
 }
 
 function mergeImportedState(current, incoming) {
@@ -664,6 +698,7 @@ function mergeImportedState(current, incoming) {
 
   merged.attendance = mergeRecordGroups(merged.attendance, imported.attendance);
   merged.attendanceCycleAnchors = mergeRecordGroups(merged.attendanceCycleAnchors, imported.attendanceCycleAnchors);
+  merged.studentCycleAnchors = mergeStudentCycleAnchors(merged.studentCycleAnchors, imported.studentCycleAnchors);
   merged.payments = mergeRecordGroups(merged.payments, imported.payments);
   merged.consulting = mergeRecordGroups(merged.consulting, imported.consulting);
   merged.classHomework = { ...merged.classHomework, ...imported.classHomework };
@@ -833,13 +868,36 @@ function saveAttendanceCycleAnchor(className, weekday, date, session, overwrite 
 function getCycleSessionFromAnchor(anchor, date, cycleLength = 4) {
   const diffDays = dateToDayNumber(date) - dateToDayNumber(anchor.date);
   const weekOffset = Math.floor(diffDays / 7);
-  const length = Number(cycleLength) === 8 ? 8 : 4;
+  const length = normalizeCycleLength(cycleLength);
   const zeroBased = ((Number(anchor.session || 1) - 1 + weekOffset) % length + length) % length;
   return zeroBased + 1;
 }
 
 function getClassCycleLength(className) {
-  return Number(getClassInfo(className)?.cycleLength || 4) === 8 ? 8 : 4;
+  return normalizeCycleLength(getClassInfo(className)?.cycleLength || 4);
+}
+
+function getClassMeetingDates(classInfo, total = classInfo?.cycleLength) {
+  const startDate = normalizeDateValue(classInfo?.cycleStartDate || classInfo?.startDate);
+  const count = normalizeCycleLength(total || 0, 0);
+  if (!classInfo || !startDate || !count) return [];
+  const weekdays = getClassWeekdays(classInfo);
+  const dates = [startDate];
+  if (count === 1 || !weekdays.length) return dates;
+  const cursor = parseDate(startDate);
+  for (let guard = 0; dates.length < count && guard < 450; guard += 1) {
+    cursor.setDate(cursor.getDate() + 1);
+    if (weekdays.includes("일월화수목금토"[cursor.getDay()])) dates.push(dateKey(cursor));
+  }
+  return dates;
+}
+
+function formatClassMeetingDates(classInfo) {
+  const dates = getClassMeetingDates(classInfo);
+  const total = getClassCycleLength(classInfo?.name);
+  if (!classInfo?.cycleStartDate) return "";
+  if (dates.length < total) return `총 ${total}회 · 수업 요일을 입력하면 전체 날짜가 계산됩니다.`;
+  return `총 ${total}회 · ${dates.map(shortScheduleDate).join(", ")}`;
 }
 
 function getClassCycleSessionForDate(className, date) {
@@ -862,8 +920,40 @@ function getClassCycleSessionForDate(className, date) {
   return ((sessionIndex - 1) % getClassCycleLength(className)) + 1;
 }
 
+function getStudentCycleAnchor(studentId, className) {
+  const anchor = state.studentCycleAnchors?.[studentId]?.[className];
+  return anchor?.reset ? null : anchor || null;
+}
+
+function getStudentCycleSessionForDate(studentId, className, date) {
+  const anchor = getStudentCycleAnchor(studentId, className);
+  if (!anchor?.date) return getClassCycleSessionForDate(className, date);
+  const classInfo = getClassInfo(className);
+  if (!classInfo) return Number(anchor.session || 1);
+  const movedLesson = state.scheduleEvents.find((event) =>
+    event.type === "정규반 수업 변경" && event.className === className && event.moveToDate === date,
+  );
+  const lessonDate = movedLesson?.date || date;
+  if (lessonDate < anchor.date) return 0;
+  const weekdays = getClassWeekdays(classInfo);
+  let passed = 1;
+  const cursor = parseDate(anchor.date);
+  const target = parseDate(lessonDate);
+  cursor.setDate(cursor.getDate() + 1);
+  while (cursor <= target) {
+    if (weekdays.includes("일월화수목금토"[cursor.getDay()])) passed += 1;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  const length = getClassCycleLength(className);
+  return ((Number(anchor.session || 1) - 1 + passed - 1) % length) + 1;
+}
+
 function hasClassPeriodEnded(classInfo, dateValue = today()) {
-  return Boolean(classInfo) && isSpecialClassName(classInfo.name) && Boolean(classInfo.endDate) && classInfo.endDate < dateValue;
+  if (!classInfo || !isSpecialClassName(classInfo.name)) return false;
+  const calculatedDates = getClassMeetingDates(classInfo);
+  const calculatedComplete = calculatedDates.length === getClassCycleLength(classInfo.name);
+  const effectiveEndDate = calculatedComplete ? calculatedDates.at(-1) : classInfo.endDate || "";
+  return Boolean(effectiveEndDate) && effectiveEndDate < dateValue;
 }
 
 function isClassEnded(classInfo, dateValue = today()) {
@@ -1045,6 +1135,7 @@ function bindEvents() {
   $("#homeworkClass").addEventListener("change", renderHomework);
   $("#classEditSelect").addEventListener("change", fillClassEditForm);
   $("#classTypeInput").addEventListener("change", syncSpecialClassDateFields);
+  $("#classCycleLengthInput").addEventListener("change", syncClassCycleFields);
   $("#newClassBtn").addEventListener("click", startNewClassForm);
   $("#saveClassInfoBtn").addEventListener("click", saveClassInfoFromForm);
   $("#toggleClassEndedBtn").addEventListener("click", toggleSelectedClassEnded);
@@ -1112,6 +1203,11 @@ function bindEvents() {
   $("#closeClassScheduleMoveBtn").addEventListener("click", closeClassScheduleMoveDialog);
   $("#cancelClassScheduleMoveBtn").addEventListener("click", closeClassScheduleMoveDialog);
   $("#classScheduleMoveDialog").addEventListener("close", () => { editingClassScheduleMoveId = ""; });
+  $("#saveStudentCycleBtn").addEventListener("click", saveStudentCycleOverride);
+  $("#resetStudentCycleBtn").addEventListener("click", resetStudentCycleOverride);
+  $("#closeStudentCycleBtn").addEventListener("click", closeStudentCycleDialog);
+  $("#cancelStudentCycleBtn").addEventListener("click", closeStudentCycleDialog);
+  $("#studentCycleDialog").addEventListener("close", () => { editingStudentCycleId = ""; });
   $("#scheduleTypeInput").addEventListener("change", () => {
     syncScheduleMoveFields();
     syncScheduleRepeatFields();
@@ -1507,8 +1603,12 @@ function getClassWeekdays(item) {
 function isClassActiveOnDate(classInfo, dateValue) {
   if (!classInfo || !dateValue) return false;
   if (classInfo.manuallyEnded && (!classInfo.endedAt || dateValue >= classInfo.endedAt)) return false;
-  if (classInfo.startDate && dateValue < classInfo.startDate) return false;
-  if (classInfo.endDate && dateValue > classInfo.endDate) return false;
+  const calculatedDates = classInfo.type === "방학특강" ? getClassMeetingDates(classInfo) : [];
+  const calculatedComplete = calculatedDates.length === getClassCycleLength(classInfo.name);
+  const effectiveStartDate = calculatedComplete ? calculatedDates[0] : classInfo.startDate;
+  const effectiveEndDate = calculatedComplete ? calculatedDates.at(-1) : classInfo.endDate;
+  if (effectiveStartDate && dateValue < effectiveStartDate) return false;
+  if (effectiveEndDate && dateValue > effectiveEndDate) return false;
   return true;
 }
 
@@ -1573,7 +1673,10 @@ function scheduleItemsForDate(dateValue) {
   const classItems = classes
     .filter((item) => {
       if (!isClassActiveOnDate(item, dateValue)) return false;
-      let occurs = getClassWeekdays(item).includes(weekday);
+      const calculatedSpecialDates = item.type === "방학특강" ? getClassMeetingDates(item) : [];
+      let occurs = item.type === "방학특강" && item.cycleStartDate
+        ? calculatedSpecialDates.includes(dateValue)
+        : getClassWeekdays(item).includes(weekday);
       if (vacationEvents.length) {
         if (!vacationOperatingClasses.has(item.name)) return false;
         const override = [...vacationEvents].reverse().map((event) => event.vacationClassOverrides?.[item.name]).find(Boolean);
@@ -2010,21 +2113,29 @@ function fillClassEditForm() {
   $("#classStartDateInput").value = classInfo.startDate || "";
   $("#classEndDateInput").value = classInfo.endDate || "";
   $("#classCycleStartDateInput").value = classInfo.cycleStartDate || "";
-  $("#classCycleLengthInput").value = String(classInfo.cycleLength || 4);
+  const cycleLength = normalizeCycleLength(classInfo.cycleLength || 4);
+  $("#classCycleLengthInput").value = [4, 8].includes(cycleLength) ? String(cycleLength) : "custom";
+  $("#classCustomCycleLengthInput").value = [4, 8].includes(cycleLength) ? "" : String(cycleLength);
   $("#classSubjectInput").value = classInfo.subject || subjectChoices[0];
   $("#classBookInput").value = classInfo.defaultBook || "";
   $("#classTuitionInput").value = classInfo.tuition || "";
   $("#toggleClassEndedBtn").disabled = false;
   $("#toggleClassEndedBtn").textContent = hasClassPeriodEnded(classInfo) ? "종료일 수정 필요" : classInfo.manuallyEnded ? "종강 취소" : "반 종강 처리";
   syncSpecialClassDateFields();
+  syncClassCycleFields();
 }
 
 function syncSpecialClassDateFields() {
   const isSpecial = $("#classTypeInput")?.value === "방학특강";
   $("#classStartDateField").hidden = !isSpecial;
   $("#classEndDateField").hidden = !isSpecial;
-  $("#classCycleStartDateField").hidden = isSpecial;
-  $("#classCycleLengthField").hidden = isSpecial;
+  $("#classCycleStartDateField").hidden = false;
+  $("#classCycleLengthField").hidden = false;
+  syncClassCycleFields();
+}
+
+function syncClassCycleFields() {
+  $("#classCustomCycleLengthField").hidden = $("#classCycleLengthInput")?.value !== "custom";
 }
 
 function startNewClassForm(clearSelect = true) {
@@ -2039,6 +2150,7 @@ function startNewClassForm(clearSelect = true) {
   $("#classEndDateInput").value = "";
   $("#classCycleStartDateInput").value = "";
   $("#classCycleLengthInput").value = "4";
+  $("#classCustomCycleLengthInput").value = "";
   $("#classSubjectInput").value = "교과과학";
   $("#classBookInput").value = "";
   $("#classTuitionInput").value = "";
@@ -2072,8 +2184,10 @@ function saveClassInfoFromForm() {
     tuition: Number($("#classTuitionInput").value || current?.tuition || 0),
     startDate: $("#classTypeInput").value === "방학특강" ? $("#classStartDateInput").value : "",
     endDate: $("#classTypeInput").value === "방학특강" ? $("#classEndDateInput").value : "",
-    cycleStartDate: $("#classTypeInput").value === "정규반" ? $("#classCycleStartDateInput").value : "",
-    cycleLength: $("#classTypeInput").value === "정규반" && Number($("#classCycleLengthInput").value) === 8 ? 8 : 4,
+    cycleStartDate: $("#classCycleStartDateInput").value,
+    cycleLength: $("#classCycleLengthInput").value === "custom"
+      ? normalizeCycleLength($("#classCustomCycleLengthInput").value, 0)
+      : normalizeCycleLength($("#classCycleLengthInput").value),
     manuallyEnded: Boolean(current?.manuallyEnded),
     endedAt: current?.endedAt || "",
     custom: !defaultClasses.some((classInfo) => classInfo.name === className),
@@ -2081,6 +2195,10 @@ function saveClassInfoFromForm() {
   };
   if (savedClassInfo.startDate && savedClassInfo.endDate && savedClassInfo.endDate < savedClassInfo.startDate) {
     alert("특강 종강일은 개강일보다 빠를 수 없습니다.");
+    return;
+  }
+  if (!savedClassInfo.cycleLength) {
+    alert("기타 전체 회차는 1~60 사이 숫자로 입력해주세요.");
     return;
   }
   if (savedClassInfo.custom) {
@@ -2199,8 +2317,8 @@ function renderClassCard(item, ended = false) {
   const periodText = item.type === "방학특강" && (item.startDate || item.endDate)
     ? `<span class="special-class-period">${item.startDate || "시작일 미정"} ~ ${item.endDate || "종료일 미정"}${specialStatus}</span>`
     : ended ? `<span class="special-class-period ended">${item.endedAt || "종강일 미기록"} · 수동 종강</span>` : "";
-  const cycleText = item.type === "정규반" && item.cycleStartDate
-    ? `<span class="special-class-period">${item.cycleStartDate} 1회차 시작 · ${getClassCycleLength(item.name)}회 구성</span>`
+  const cycleText = item.cycleStartDate
+    ? `<span class="special-class-period">${item.type === "방학특강" ? formatClassMeetingDates(item) : `${item.cycleStartDate} 1회차 시작 · ${getClassCycleLength(item.name)}회 구성`}</span>`
     : "";
   return `
     <article class="class-card ${ended ? "ended" : ""}">
@@ -2808,7 +2926,7 @@ function renderAttendance() {
   const anchor = classInfo?.cycleStartDate
     ? { date: classInfo.cycleStartDate, session: 1, classSetting: true }
     : getAttendanceCycleAnchor(className, weekday);
-  $("#attendanceRound").value = String(session);
+  renderAttendanceRoundOptions(getClassCycleLength(className), session);
   $("#attendanceList").innerHTML = students.length
     ? `<div class="helper-line">${className} · ${getWeekdayLabel(weekday)} 기준입니다. 오늘 기록은 ${session}회차로 저장됩니다.${
         anchor ? ` 기준점: ${anchor.date} ${anchor.session}회차 · ${getClassCycleLength(className)}회 구성` : " 회차를 수동으로 바꾸면 이 요일 기준점으로 저장됩니다."
@@ -2817,15 +2935,28 @@ function renderAttendance() {
     : `<div class="empty-state">이 반 학생이 아직 없습니다. 학생관리에서 학생을 추가하거나 기존 학생의 수강반을 ${className}(으)로 바꾸면 자동으로 나타납니다.</div>`;
 }
 
+function renderAttendanceRoundOptions(cycleLength, selectedSession = 1) {
+  const select = $("#attendanceRound");
+  if (!select) return;
+  const length = normalizeCycleLength(cycleLength);
+  const selected = Math.min(Math.max(Math.round(Number(selectedSession) || 1), 1), length);
+  select.innerHTML = Array.from({ length }, (_, index) => {
+    const session = index + 1;
+    return `<option value="${session}">${session}회차</option>`;
+  }).join("");
+  select.value = String(selected);
+}
+
 function renderAttendanceRow(student, date) {
   const record = getAttendanceRecord(student.id, date);
-  const session = record.session || getAttendanceSession($("#attendanceClass").value, date);
+  const className = $("#attendanceClass").value;
+  const session = record.session || getStudentCycleSessionForDate(student.id, className, date) || getAttendanceSession(className, date);
   const showMakeup = record.status === "결석" || record.makeupDate;
   return `
     <article class="manage-row">
       <div>
         <strong>${student.name}</strong>
-        <div class="meta">${student.school || "-"} · ${student.grade || "-"} · ${session}회차 · 학부모 ${student.parentPhone || "-"}</div>
+        <div class="meta">${student.school || "-"} · ${student.grade || "-"} · ${session}회차 · 학부모 ${student.parentPhone || "-"} <button class="mini-button" type="button" onclick="openStudentCycleDialog('${student.id}', '${className}', '${date}')">개인 회차 수정</button></div>
       </div>
       <div class="segmented">
         ${attendanceStates
@@ -2852,13 +2983,63 @@ function getAttendance(studentId, date) {
 
 function getAttendanceRecord(studentId, date) {
   const saved = state.attendance[date]?.[studentId];
-  if (!saved) return { status: "출석", session: Number($("#attendanceRound")?.value || 1), makeupDate: "" };
-  if (typeof saved === "string") return { status: saved, session: Number($("#attendanceRound")?.value || 1), makeupDate: "" };
+  const className = $("#attendanceClass")?.value || state.students.find((student) => student.id === studentId)?.className || "";
+  const personalSession = getStudentCycleSessionForDate(studentId, className, date) || Number($("#attendanceRound")?.value || 1);
+  if (!saved) return { status: "출석", session: personalSession, makeupDate: "" };
+  if (typeof saved === "string") return { status: saved, session: personalSession, makeupDate: "" };
   return {
     status: saved.status || "출석",
     session: Number(saved.session || $("#attendanceRound")?.value || 1),
     makeupDate: saved.makeupDate || "",
   };
+}
+
+function openStudentCycleDialog(studentId, className, date) {
+  const student = state.students.find((item) => item.id === studentId);
+  if (!student || !className || !date) return;
+  editingStudentCycleId = studentId;
+  $("#studentCycleDialog").dataset.className = className;
+  $("#studentCycleDateInput").value = date;
+  const currentSession = getStudentCycleSessionForDate(studentId, className, date) || getAttendanceSession(className, date);
+  $("#studentCycleRoundInput").value = String(currentSession);
+  $("#studentCycleRoundInput").max = String(getClassCycleLength(className));
+  $("#studentCycleSummary").textContent = `${student.name} · ${className} · 반 전체 ${getClassCycleLength(className)}회 구성`;
+  $("#studentCycleDialog").showModal();
+}
+
+function closeStudentCycleDialog() {
+  $("#studentCycleDialog").close();
+}
+
+function saveStudentCycleOverride() {
+  const studentId = editingStudentCycleId;
+  const className = $("#studentCycleDialog").dataset.className || "";
+  const date = $("#studentCycleDateInput").value;
+  const session = Math.round(Number($("#studentCycleRoundInput").value));
+  const maxSession = getClassCycleLength(className);
+  if (!studentId || !className || !date) return;
+  if (!Number.isFinite(session) || session < 1 || session > maxSession) return alert(`개인 회차는 1~${maxSession} 사이로 입력해주세요.`);
+  state.studentCycleAnchors = state.studentCycleAnchors || {};
+  state.studentCycleAnchors[studentId] = state.studentCycleAnchors[studentId] || {};
+  state.studentCycleAnchors[studentId][className] = { date, session, updatedAt: Date.now() };
+  if (state.attendance[date]?.[studentId] && typeof state.attendance[date][studentId] === "object") {
+    state.attendance[date][studentId].session = session;
+  }
+  saveState();
+  closeStudentCycleDialog();
+  renderAttendance();
+}
+
+function resetStudentCycleOverride() {
+  const studentId = editingStudentCycleId;
+  const className = $("#studentCycleDialog").dataset.className || "";
+  if (!studentId || !className) return;
+  state.studentCycleAnchors = state.studentCycleAnchors || {};
+  state.studentCycleAnchors[studentId] = state.studentCycleAnchors[studentId] || {};
+  state.studentCycleAnchors[studentId][className] = { reset: true, updatedAt: Date.now() };
+  saveState();
+  closeStudentCycleDialog();
+  renderAttendance();
 }
 
 function getAttendanceSession(className, date, weekday = getSelectedAttendanceWeekday()) {
@@ -2893,7 +3074,10 @@ function saveAttendanceSession() {
   students.forEach((student) => {
     const record = getAttendanceRecord(student.id, date);
     if (state.attendance[date]?.[student.id]) {
-      state.attendance[date][student.id] = { ...record, session };
+      const studentSession = getStudentCycleAnchor(student.id, className)
+        ? getStudentCycleSessionForDate(student.id, className, date) || session
+        : session;
+      state.attendance[date][student.id] = { ...record, session: studentSession };
     }
   });
   saveState();
@@ -2902,13 +3086,17 @@ function saveAttendanceSession() {
 
 function syncAttendanceRoundControl() {
   if (!$("#attendanceRound")) return;
-  $("#attendanceRound").value = String(getAttendanceSession($("#attendanceClass").value, $("#attendanceDate").value, getSelectedAttendanceWeekday()));
+  const className = $("#attendanceClass").value;
+  const session = getAttendanceSession(className, $("#attendanceDate").value, getSelectedAttendanceWeekday());
+  renderAttendanceRoundOptions(getClassCycleLength(className), session);
 }
 
 function setAttendance(studentId, date, status) {
   const student = state.students.find((item) => item.id === studentId);
   const weekday = getSelectedAttendanceWeekday();
-  const session = Number($("#attendanceRound")?.value || getAttendanceSession(student?.className || "", date, weekday));
+  const className = $("#attendanceClass")?.value || student?.className || "";
+  const session = getStudentCycleSessionForDate(studentId, className, date)
+    || Number($("#attendanceRound")?.value || getAttendanceSession(className, date, weekday));
   const previous = getAttendanceRecord(studentId, date);
   state.attendance[date] = state.attendance[date] || {};
   state.attendance[date][studentId] = {
@@ -2920,8 +3108,10 @@ function setAttendance(studentId, date, status) {
   if (student) {
     state.attendanceSessions = state.attendanceSessions || {};
     state.attendanceSessions[date] = state.attendanceSessions[date] || {};
-    state.attendanceSessions[date][student.className] = session;
-    saveAttendanceCycleAnchor(student.className, weekday, date, session, false);
+    if (!getStudentCycleAnchor(studentId, className)) {
+      state.attendanceSessions[date][className] = session;
+      saveAttendanceCycleAnchor(className, weekday, date, session, false);
+    }
   }
   saveState();
   renderAttendance();
