@@ -64,13 +64,52 @@ function protectStoredStudentCredentials(incomingState = {}, storedState = {}) {
   };
 }
 
+function scheduleEventVersion(event = {}) {
+  return Number(event.updatedAt || event.createdAt || 0);
+}
+
+function mergeStoredScheduleEvents(incomingState = {}, storedState = {}) {
+  const tombstones = { ...(storedState.scheduleEventTombstones || {}) };
+  Object.entries(incomingState.scheduleEventTombstones || {}).forEach(([id, deletedAt]) => {
+    tombstones[id] = Math.max(Number(tombstones[id] || 0), Number(deletedAt || 0));
+  });
+  const events = new Map();
+  [...(storedState.scheduleEvents || []), ...(incomingState.scheduleEvents || [])].forEach((event) => {
+    if (!event?.id) return;
+    const existing = events.get(event.id);
+    if (!existing || scheduleEventVersion(event) >= scheduleEventVersion(existing)) events.set(event.id, event);
+  });
+  return {
+    events: Array.from(events.values()).filter((event) => Number(tombstones[event.id] || 0) < scheduleEventVersion(event)),
+    tombstones,
+  };
+}
+
+function protectStoredSchedules(incomingState = {}, storedState = {}) {
+  const merged = mergeStoredScheduleEvents(incomingState, storedState);
+  const storedShape = JSON.stringify({
+    events: storedState.scheduleEvents || [],
+    tombstones: storedState.scheduleEventTombstones || {},
+  });
+  const incomingShape = JSON.stringify({
+    events: incomingState.scheduleEvents || [],
+    tombstones: incomingState.scheduleEventTombstones || {},
+  });
+  const history = Array.isArray(storedState.scheduleEventHistory) ? storedState.scheduleEventHistory : [];
+  const nextHistory = storedShape === incomingShape
+    ? history
+    : [{ savedAt: new Date().toISOString(), scheduleEvents: storedState.scheduleEvents || [], scheduleEventTombstones: storedState.scheduleEventTombstones || {} }, ...history].slice(0, 20);
+  return { ...incomingState, scheduleEvents: merged.events, scheduleEventTombstones: merged.tombstones, scheduleEventHistory: nextHistory };
+}
+
 async function persistStateWithoutCredentialLoss(incomingState) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const storedResult = await adminRest("office_state?id=eq.main&select=payload,updated_at");
     if (!storedResult.ok) throw new Error("기존 온라인 자료를 확인하지 못해 저장을 중단했습니다.");
     const storedRows = await storedResult.json();
     const storedRow = storedRows[0];
-    const state = protectStoredStudentCredentials(incomingState, storedRow?.payload || {});
+    const storedState = storedRow?.payload || {};
+    const state = protectStoredSchedules(protectStoredStudentCredentials(incomingState, storedState), storedState);
     const updatedAt = new Date().toISOString();
 
     if (!storedRow) {
@@ -179,6 +218,8 @@ export default async function handler(request, response) {
           temporaryPassword: student.temporaryPassword || "",
           credentialUpdatedAt: Number(student.credentialUpdatedAt || 0),
         })),
+        scheduleEvents: state.scheduleEvents || [],
+        scheduleEventTombstones: state.scheduleEventTombstones || {},
       });
     }
     response.setHeader("Allow", "GET, POST");

@@ -79,6 +79,8 @@ function createInitialState() {
     classrooms: [],
     announcements: [],
     scheduleEvents: [],
+    scheduleEventTombstones: {},
+    scheduleEventHistory: [],
     scoreExams: [],
   };
 }
@@ -99,6 +101,8 @@ function normalizeState(saved) {
     classrooms: [],
     announcements: [],
     scheduleEvents: [],
+    scheduleEventTombstones: {},
+    scheduleEventHistory: [],
     scoreExams: [],
     ...saved,
   };
@@ -176,6 +180,12 @@ function normalizeState(saved) {
     createdAt: record.createdAt || Date.now(),
   }));
   next.classrooms = normalizeClassrooms(next.classrooms);
+  next.scheduleEventTombstones = Object.fromEntries(
+    Object.entries(next.scheduleEventTombstones || {})
+      .map(([id, deletedAt]) => [String(id || ""), Number(deletedAt || 0)])
+      .filter(([id, deletedAt]) => id && deletedAt > 0),
+  );
+  next.scheduleEventHistory = Array.isArray(next.scheduleEventHistory) ? next.scheduleEventHistory.slice(0, 20) : [];
   next.scheduleEvents = (next.scheduleEvents || []).map((event) => ({
     id: event.id || crypto.randomUUID(), date: event.date || today(), endDate: event.endDate || "", type: event.type || "학원 행사",
     title: event.title || "", memo: event.memo || "", time: event.time || "", endTime: event.endTime || "",
@@ -187,7 +197,8 @@ function normalizeState(saved) {
       ? [...new Set(event.vacationOperatingClassNames.filter(Boolean))]
       : [],
     moveToDate: event.moveToDate || "", moveToTime: event.moveToTime || "", moveToEndTime: event.moveToEndTime || "", createdAt: event.createdAt || Date.now(),
-  }));
+    updatedAt: event.updatedAt || event.createdAt || Date.now(),
+  })).filter((event) => Number(next.scheduleEventTombstones[event.id] || 0) < Number(event.updatedAt || event.createdAt || 0));
   return next;
 }
 
@@ -441,6 +452,19 @@ async function saveStateToServer() {
         renderStudents();
       }
     }
+    if (Array.isArray(result.scheduleEvents)) {
+      const mergedSchedules = mergeScheduleEventState(state, {
+        scheduleEvents: result.scheduleEvents,
+        scheduleEventTombstones: result.scheduleEventTombstones || {},
+      });
+      const before = JSON.stringify({ events: state.scheduleEvents || [], tombstones: state.scheduleEventTombstones || {} });
+      state.scheduleEvents = mergedSchedules.events;
+      state.scheduleEventTombstones = mergedSchedules.tombstones;
+      if (before !== JSON.stringify({ events: mergedSchedules.events, tombstones: mergedSchedules.tombstones })) {
+        localStorage.setItem(storageKey, JSON.stringify(state));
+        renderScheduleCalendar();
+      }
+    }
     return true;
   } catch (error) {
     // 로컬 파일 저장 서버가 꺼져 있으면 브라우저 저장만 유지합니다.
@@ -527,6 +551,15 @@ async function syncStateFromServer() {
     const serverClassShape = JSON.stringify({ customClasses: serverState.customClasses || [], classSettings: serverState.classSettings || {} });
     const localAnnouncementShape = JSON.stringify(state.announcements || []);
     const serverAnnouncementShape = JSON.stringify(serverState.announcements || []);
+    const localScheduleShape = JSON.stringify({ events: state.scheduleEvents || [], tombstones: state.scheduleEventTombstones || {} });
+    const serverScheduleShape = JSON.stringify({ events: serverState.scheduleEvents || [], tombstones: serverState.scheduleEventTombstones || {} });
+    const mergedSchedules = mergeScheduleEventState(serverState, state);
+    state.scheduleEvents = mergedSchedules.events;
+    state.scheduleEventTombstones = mergedSchedules.tombstones;
+    serverState.scheduleEvents = mergedSchedules.events;
+    serverState.scheduleEventTombstones = mergedSchedules.tombstones;
+    const localSchedulesRecovered = localScheduleShape !== JSON.stringify({ events: mergedSchedules.events, tombstones: mergedSchedules.tombstones });
+    const serverSchedulesRecovered = serverScheduleShape !== JSON.stringify({ events: mergedSchedules.events, tombstones: mergedSchedules.tombstones });
 
     if (
       serverCount > localCount ||
@@ -541,7 +574,7 @@ async function syncStateFromServer() {
       refreshClassControls();
       renderAll();
       syncingFromServer = false;
-      if (retiredClassMigrationNeeded || serverCredentialsRecovered) queueServerSave();
+      if (retiredClassMigrationNeeded || serverCredentialsRecovered || serverSchedulesRecovered) queueServerSave();
       return;
     }
 
@@ -559,7 +592,11 @@ async function syncStateFromServer() {
       saveState({ localOnly: true });
       renderStudents();
     }
-    if (retiredClassMigrationNeeded || serverCredentialsRecovered) queueServerSave();
+    if (localSchedulesRecovered) {
+      saveState({ localOnly: true });
+      renderScheduleCalendar();
+    }
+    if (retiredClassMigrationNeeded || serverCredentialsRecovered || serverSchedulesRecovered) queueServerSave();
   } catch (error) {
     // 서버 저장을 사용할 수 없는 환경에서는 기존 브라우저 저장을 사용합니다.
   } finally {
@@ -623,6 +660,9 @@ function mergeImportedState(current, incoming) {
   merged.waitlist = mergeListById(merged.waitlist, imported.waitlist);
   merged.classrooms = mergeClassrooms(merged.classrooms, imported.classrooms);
   merged.announcements = mergeListById(merged.announcements, imported.announcements);
+  const importedSchedules = mergeScheduleEventState(merged, imported);
+  merged.scheduleEvents = importedSchedules.events;
+  merged.scheduleEventTombstones = importedSchedules.tombstones;
   return { state: merged, added, updated };
 }
 
@@ -653,6 +693,27 @@ function mergeListById(current = [], incoming = []) {
   const map = new Map(current.map((item) => [item.id, item]));
   incoming.forEach((item) => map.set(item.id, { ...(map.get(item.id) || {}), ...item }));
   return Array.from(map.values());
+}
+
+function scheduleEventVersion(event = {}) {
+  return Number(event.updatedAt || event.createdAt || 0);
+}
+
+function mergeScheduleEventState(leftState = {}, rightState = {}) {
+  const tombstones = { ...(leftState.scheduleEventTombstones || {}) };
+  Object.entries(rightState.scheduleEventTombstones || {}).forEach(([id, deletedAt]) => {
+    tombstones[id] = Math.max(Number(tombstones[id] || 0), Number(deletedAt || 0));
+  });
+  const map = new Map();
+  [...(leftState.scheduleEvents || []), ...(rightState.scheduleEvents || [])].forEach((event) => {
+    if (!event?.id) return;
+    const existing = map.get(event.id);
+    if (!existing || scheduleEventVersion(event) >= scheduleEventVersion(existing)) map.set(event.id, event);
+  });
+  const events = Array.from(map.values())
+    .filter((event) => Number(tombstones[event.id] || 0) < scheduleEventVersion(event))
+    .sort((left, right) => scheduleEventVersion(left) - scheduleEventVersion(right));
+  return { events, tombstones };
 }
 
 function getClassInfo(className) {
@@ -1575,7 +1636,7 @@ function selectScheduleDate(value) {
   renderScheduleCalendar();
 }
 
-function addScheduleEvent() {
+async function addScheduleEvent() {
   const date = $("#scheduleDateInput").value, title = $("#scheduleTitleInput").value.trim();
   if (!date || !title) return alert("일자와 일정명을 입력해주세요.");
   const scheduleEndDate = $("#scheduleEndDateInput").value;
@@ -1593,12 +1654,15 @@ function addScheduleEvent() {
   if (moveToDate && (!moveToTime || !moveToEndTime)) return alert("보강일을 정했다면 보강 시작시간과 종료시간도 함께 입력해주세요.");
   if (moveToTime && moveToEndTime && moveToEndTime <= moveToTime) return alert("보강 종료시간은 보강 시작시간보다 늦게 선택해주세요.");
   const existing = state.scheduleEvents.find((item) => item.id === editingScheduleEventId);
-  const eventRecord = { id: existing?.id || crypto.randomUUID(), date, endDate: scheduleEndDate, type, title, time, endTime, memo: $("#scheduleMemoInput").value.trim(), repeatType, repeatWeekdays, vacationOperatingClassNames, moveToDate, moveToTime, moveToEndTime, createdAt: existing?.createdAt || Date.now() };
+  const updatedAt = Date.now();
+  const eventRecord = { id: existing?.id || crypto.randomUUID(), date, endDate: scheduleEndDate, type, title, time, endTime, memo: $("#scheduleMemoInput").value.trim(), repeatType, repeatWeekdays, vacationOperatingClassNames, moveToDate, moveToTime, moveToEndTime, createdAt: existing?.createdAt || updatedAt, updatedAt };
+  delete state.scheduleEventTombstones[eventRecord.id];
   if (existing) state.scheduleEvents = state.scheduleEvents.map((item) => item.id === existing.id ? eventRecord : item);
   else state.scheduleEvents.push(eventRecord);
   selectedScheduleDate = date;
   clearScheduleEditor(date);
-  saveState(); renderScheduleCalendar();
+  saveState({ localOnly: true }); renderScheduleCalendar();
+  if (!(await saveStateToServer())) alert(`일정은 이 컴퓨터에 보관했지만 온라인 저장에 실패했습니다.\n${lastServerSaveError || "잠시 후 다시 시도해주세요."}`);
 }
 
 function editScheduleEvent(id) {
@@ -1653,12 +1717,14 @@ function cancelScheduleEdit() {
   clearScheduleEditor();
 }
 
-function deleteScheduleEvent(id) {
+async function deleteScheduleEvent(id) {
   const event = state.scheduleEvents.find((item) => item.id === id);
   if (!event || !confirm(`${event.title} 일정을 삭제할까요?`)) return;
+  state.scheduleEventTombstones[id] = Date.now();
   state.scheduleEvents = state.scheduleEvents.filter((item) => item.id !== id);
   if (editingScheduleEventId === id) clearScheduleEditor();
-  saveState(); renderScheduleCalendar();
+  saveState({ localOnly: true }); renderScheduleCalendar();
+  if (!(await saveStateToServer())) alert(`삭제 내용은 이 컴퓨터에 보관했지만 온라인 저장에 실패했습니다.\n${lastServerSaveError || "잠시 후 다시 시도해주세요."}`);
 }
 
 function scheduleEventActionButtons(item) {
