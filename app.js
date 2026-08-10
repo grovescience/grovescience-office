@@ -223,6 +223,12 @@ function normalizeClassrooms(classrooms = []) {
   });
 }
 
+function compareClassroomPostsByLessonDate(left, right) {
+  const lessonDateOrder = String(right.lessonDate || "").localeCompare(String(left.lessonDate || ""));
+  if (lessonDateOrder) return lessonDateOrder;
+  return Number(right.updatedAt || right.createdAt || 0) - Number(left.updatedAt || left.createdAt || 0);
+}
+
 function normalizeAnnouncements(announcements = []) {
   return (Array.isArray(announcements) ? announcements : []).map((announcement) => ({
     id: announcement.id || crypto.randomUUID(),
@@ -629,7 +635,7 @@ function mergeClassrooms(current = [], incoming = []) {
       map.set(room.id, room);
       return;
     }
-    const posts = mergeListById(existing.posts, room.posts).sort((a, b) => b.createdAt - a.createdAt);
+    const posts = mergeListById(existing.posts, room.posts).sort(compareClassroomPostsByLessonDate);
     map.set(room.id, {
       ...existing,
       ...room,
@@ -4042,7 +4048,9 @@ function renderAdminClassroomPosts() {
     .flatMap((room) => (room.posts || []).map((post) => ({ room, post })))
     .sort((a, b) => Number(b.post.updatedAt || b.post.createdAt || 0) - Number(a.post.updatedAt || a.post.createdAt || 0));
   const entries = selectedRoom
-    ? allPosts.filter((entry) => entry.room.id === selectedRoom.id)
+    ? allPosts
+        .filter((entry) => entry.room.id === selectedRoom.id)
+        .sort((left, right) => compareClassroomPostsByLessonDate(left.post, right.post))
     : (showAllRecentClassroomPosts ? allPosts : allPosts.slice(0, 5));
   $("#adminClassroomPostsTitle").textContent = selectedRoom ? `${classroomDisplayText(selectedRoom.name)} 게시글` : "최근 업로드";
   $("#adminClassroomPostsHint").textContent = selectedRoom
@@ -4213,7 +4221,7 @@ function renderStudentClassroomPosts() {
   const posts = [...(room?.posts || [])];
   $("#studentClassroomTitle").textContent = room ? classroomDisplayText(room.name) : "게시글";
   $("#studentPostList").innerHTML = posts.length
-    ? posts.sort((a, b) => b.createdAt - a.createdAt).map((post) => renderClassroomPostCard(room.id, post, false)).join("")
+    ? posts.sort(compareClassroomPostsByLessonDate).map((post) => renderClassroomPostCard(room.id, post, false)).join("")
     : `<div class="empty-state">확인할 게시글이 없습니다.</div>`;
   hydrateClassroomImages($("#studentPostList"), "./api/classroom-images");
 }
@@ -4262,7 +4270,7 @@ function openClassRoomPreview(roomId) {
 function renderClassRoomPreviewPosts() {
   const { rooms } = getClassRoomPreviewData();
   const room = rooms.find((item) => item.id === currentClassPreviewRoomId);
-  const posts = [...(room?.posts || [])].sort((left, right) => right.createdAt - left.createdAt);
+  const posts = [...(room?.posts || [])].sort(compareClassroomPostsByLessonDate);
   $("#classRoomPreviewPostTitle").textContent = room ? classroomDisplayText(room.name) : "게시글";
   $("#classRoomPreviewPosts").innerHTML = posts.length
     ? posts.map((post) => renderClassroomPostCard(room.id, post, false)).join("")

@@ -288,11 +288,17 @@ function renderStudentScores() {
     : `<div class="empty">아직 등록된 성적이 없습니다.</div>`;
 }
 
+function comparePostsByLessonDate(left, right) {
+  const lessonDateOrder = String(right.lessonDate || "").localeCompare(String(left.lessonDate || ""));
+  if (lessonDateOrder) return lessonDateOrder;
+  return Number(right.updatedAt || right.createdAt || 0) - Number(left.updatedAt || left.createdAt || 0);
+}
+
 function renderPosts() {
   const room = getAllowedRooms().find((item) => item.id === currentRoomId);
   $("#roomTitle").textContent = room ? displayOrchardOnText(room.name) : "게시글";
   $("#postList").innerHTML = room?.posts?.length
-    ? [...room.posts].sort((a, b) => b.createdAt - a.createdAt).map(renderPost).join("")
+    ? [...room.posts].sort(comparePostsByLessonDate).map(renderPost).join("")
     : `<div class="empty">확인할 게시글이 없습니다.</div>`;
   hydratePostImages();
 }
