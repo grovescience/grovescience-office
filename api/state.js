@@ -36,6 +36,67 @@ function getStudentClassNames(student) {
   return [...new Set([student.className, ...(student.specialClassNames || [])].filter(Boolean))];
 }
 
+function resolveStoredCredentials(storedStudent = {}, incomingStudent = {}) {
+  const storedUpdatedAt = Number(storedStudent.credentialUpdatedAt || 0);
+  const incomingUpdatedAt = Number(incomingStudent.credentialUpdatedAt || 0);
+  const preferred = incomingUpdatedAt > storedUpdatedAt ? incomingStudent : storedStudent;
+  const fallback = preferred === storedStudent ? incomingStudent : storedStudent;
+  const preferredLoginId = String(preferred.loginId || "").trim().toLowerCase();
+  const fallbackLoginId = String(fallback.loginId || "").trim().toLowerCase();
+  const loginId = preferredLoginId || fallbackLoginId;
+  const preferredPassword = String(preferred.temporaryPassword || "");
+  const fallbackPassword = String(fallback.temporaryPassword || "");
+  return {
+    loginId,
+    temporaryPassword: preferredPassword || (fallbackLoginId === loginId ? fallbackPassword : ""),
+    credentialUpdatedAt: Math.max(storedUpdatedAt, incomingUpdatedAt),
+  };
+}
+
+function protectStoredStudentCredentials(incomingState = {}, storedState = {}) {
+  const storedById = new Map((storedState.students || []).map((student) => [student.id, student]));
+  return {
+    ...incomingState,
+    students: (incomingState.students || []).map((student) => ({
+      ...student,
+      ...resolveStoredCredentials(storedById.get(student.id), student),
+    })),
+  };
+}
+
+async function persistStateWithoutCredentialLoss(incomingState) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const storedResult = await adminRest("office_state?id=eq.main&select=payload,updated_at");
+    if (!storedResult.ok) throw new Error("기존 온라인 자료를 확인하지 못해 저장을 중단했습니다.");
+    const storedRows = await storedResult.json();
+    const storedRow = storedRows[0];
+    const state = protectStoredStudentCredentials(incomingState, storedRow?.payload || {});
+    const updatedAt = new Date().toISOString();
+
+    if (!storedRow) {
+      const insertResult = await adminRest("office_state?on_conflict=id", {
+        method: "POST",
+        headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
+        body: JSON.stringify([{ id: "main", payload: state, updated_at: updatedAt }]),
+      });
+      if (!insertResult.ok) throw new Error("온라인 자료를 저장하지 못했습니다.");
+      const insertedRows = await insertResult.json();
+      if (insertedRows.length) return state;
+      continue;
+    }
+
+    const updateResult = await adminRest(`office_state?id=eq.main&updated_at=eq.${encodeURIComponent(storedRow.updated_at)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ payload: state, updated_at: updatedAt }),
+    });
+    if (!updateResult.ok) throw new Error("온라인 자료를 저장하지 못했습니다.");
+    const updatedRows = await updateResult.json();
+    if (updatedRows.length) return state;
+  }
+  throw new Error("다른 창에서 자료가 계속 변경되고 있어 저장하지 못했습니다. 잠시 후 다시 시도해주세요.");
+}
+
 function buildStudentAnnouncements(state, student) {
   const classNames = getStudentClassNames(student);
   return (state.announcements || [])
@@ -107,15 +168,18 @@ export default async function handler(request, response) {
       return response.status(200).json(rows[0].payload);
     }
     if (request.method === "POST") {
-      const state = request.body || {};
-      const result = await adminRest("office_state?on_conflict=id", {
-        method: "POST",
-        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify([{ id: "main", payload: state, updated_at: new Date().toISOString() }]),
-      });
-      if (!result.ok) return response.status(502).json({ error: "온라인 자료를 저장하지 못했습니다." });
+      const incomingState = request.body || {};
+      const state = await persistStateWithoutCredentialLoss(incomingState);
       await syncStudentPortals(state);
-      return response.status(200).json({ ok: true });
+      return response.status(200).json({
+        ok: true,
+        studentCredentials: (state.students || []).map((student) => ({
+          id: student.id,
+          loginId: student.loginId || "",
+          temporaryPassword: student.temporaryPassword || "",
+          credentialUpdatedAt: Number(student.credentialUpdatedAt || 0),
+        })),
+      });
     }
     response.setHeader("Allow", "GET, POST");
     return response.status(405).json({ error: "허용되지 않은 요청입니다." });

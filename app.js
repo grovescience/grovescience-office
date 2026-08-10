@@ -117,10 +117,16 @@ function normalizeState(saved) {
       previousSpecialClassNames: [],
       enrollmentDate: "",
       withdrawalDate: "",
+      loginId: "",
+      temporaryPassword: "",
+      credentialUpdatedAt: 0,
       subject: classInfo?.subject || "",
       book: classInfo?.defaultBook || "",
       ...student,
     };
+    normalized.loginId = String(normalized.loginId || "").trim().toLowerCase();
+    normalized.temporaryPassword = String(normalized.temporaryPassword || "");
+    normalized.credentialUpdatedAt = Number(normalized.credentialUpdatedAt || 0);
     const subject = subjectAliases[normalized.subject] || normalized.subject || classInfo?.subject || "교과과학";
     normalized.subject = subjectChoices.includes(subject) ? subject : "교과과학";
     normalized.specialClassNames = Array.isArray(normalized.specialClassNames)
@@ -420,12 +426,57 @@ async function saveStateToServer() {
       lastServerSaveError = result.error || `서버 응답 ${response.status}`;
       return false;
     }
+    const result = await response.json().catch(() => ({}));
+    if (Array.isArray(result.studentCredentials)) {
+      const before = studentCredentialShape(state.students || []);
+      state.students = mergeStudentCredentials(state.students || [], result.studentCredentials, state.students || []);
+      if (before !== studentCredentialShape(state.students || [])) {
+        localStorage.setItem(storageKey, JSON.stringify(state));
+        renderStudents();
+      }
+    }
     return true;
   } catch (error) {
     // 로컬 파일 저장 서버가 꺼져 있으면 브라우저 저장만 유지합니다.
     lastServerSaveError = error.message || "서버에 연결하지 못했습니다.";
     return false;
   }
+}
+
+function studentCredentialShape(students = []) {
+  return JSON.stringify(students.map((student) => ({
+    id: student.id,
+    loginId: String(student.loginId || "").trim().toLowerCase(),
+    temporaryPassword: String(student.temporaryPassword || ""),
+    credentialUpdatedAt: Number(student.credentialUpdatedAt || 0),
+  })));
+}
+
+function resolveStudentCredentials(serverStudent = {}, localStudent = {}) {
+  const serverUpdatedAt = Number(serverStudent.credentialUpdatedAt || 0);
+  const localUpdatedAt = Number(localStudent.credentialUpdatedAt || 0);
+  const preferred = localUpdatedAt > serverUpdatedAt ? localStudent : serverStudent;
+  const fallback = preferred === serverStudent ? localStudent : serverStudent;
+  const preferredLoginId = String(preferred.loginId || "").trim().toLowerCase();
+  const fallbackLoginId = String(fallback.loginId || "").trim().toLowerCase();
+  const loginId = preferredLoginId || fallbackLoginId;
+  const preferredPassword = String(preferred.temporaryPassword || "");
+  const fallbackPassword = String(fallback.temporaryPassword || "");
+  const temporaryPassword = preferredPassword || (fallbackLoginId === loginId ? fallbackPassword : "");
+  return {
+    loginId,
+    temporaryPassword,
+    credentialUpdatedAt: Math.max(serverUpdatedAt, localUpdatedAt),
+  };
+}
+
+function mergeStudentCredentials(targetStudents = [], serverStudents = [], localStudents = []) {
+  const serverById = new Map(serverStudents.map((student) => [student.id, student]));
+  const localById = new Map(localStudents.map((student) => [student.id, student]));
+  return targetStudents.map((student) => ({
+    ...student,
+    ...resolveStudentCredentials(serverById.get(student.id), localById.get(student.id)),
+  }));
 }
 
 async function syncStateFromServer() {
@@ -440,6 +491,14 @@ async function syncStateFromServer() {
       student.status === "퇴원" && Boolean(student.className || (student.specialClassNames || []).length),
     );
     const serverState = normalizeState(rawServerState);
+    const originalLocalStudents = state.students || [];
+    const originalServerStudents = serverState.students || [];
+    const localCredentialsBefore = studentCredentialShape(originalLocalStudents);
+    const serverCredentialsBefore = studentCredentialShape(originalServerStudents);
+    state.students = mergeStudentCredentials(originalLocalStudents, originalServerStudents, originalLocalStudents);
+    serverState.students = mergeStudentCredentials(originalServerStudents, originalServerStudents, originalLocalStudents);
+    const localCredentialsRecovered = localCredentialsBefore !== studentCredentialShape(state.students);
+    const serverCredentialsRecovered = serverCredentialsBefore !== studentCredentialShape(serverState.students);
     const localCount = state.students.length;
     const serverCount = serverState.students.length;
     const localStudentShape = JSON.stringify((state.students || []).map((student) => ({
@@ -476,7 +535,7 @@ async function syncStateFromServer() {
       refreshClassControls();
       renderAll();
       syncingFromServer = false;
-      if (retiredClassMigrationNeeded) queueServerSave();
+      if (retiredClassMigrationNeeded || serverCredentialsRecovered) queueServerSave();
       return;
     }
 
@@ -490,7 +549,11 @@ async function syncStateFromServer() {
       saveState({ localOnly: true });
       queueServerSave();
     }
-    if (retiredClassMigrationNeeded) queueServerSave();
+    if (localCredentialsRecovered) {
+      saveState({ localOnly: true });
+      renderStudents();
+    }
+    if (retiredClassMigrationNeeded || serverCredentialsRecovered) queueServerSave();
   } catch (error) {
     // 서버 저장을 사용할 수 없는 환경에서는 기존 브라우저 저장을 사용합니다.
   } finally {
@@ -2137,9 +2200,13 @@ function csvValue(value) {
 
 function downloadStudentCredentials(rows, fileLabel = "발급명단") {
   const headers = ["학생 이름", "학년", "수강반", "로그인 아이디", "임시 비밀번호", "과수원ON 코드", "학생용 주소", "발급 결과"];
-  const sortedRows = [...rows].sort((left, right) =>
-    String(left.loginId || "").localeCompare(String(right.loginId || ""), "en", { sensitivity: "base" }),
-  );
+  const sortedRows = [...rows].sort((left, right) => {
+    const leftId = String(left.loginId || "");
+    const rightId = String(right.loginId || "");
+    if (!leftId && rightId) return 1;
+    if (leftId && !rightId) return -1;
+    return leftId.localeCompare(rightId, "en", { sensitivity: "base" });
+  });
   const csv = [headers, ...sortedRows.map((row) => [row.name, row.grade, row.className, row.loginId, row.password, row.classroomCode, "https://grovescience-classroom.vercel.app/", row.status])]
     .map((row) => row.map(csvValue).join(","))
     .join("\r\n");
@@ -2153,14 +2220,14 @@ function downloadStudentCredentials(rows, fileLabel = "발급명단") {
 }
 
 function savedStudentCredentialRows(students = state.students) {
-  return sortStudentsByGradeName(students.filter((student) => student.loginId)).map((student) => ({
+  return sortStudentsByGradeName(students).map((student) => ({
     name: student.name,
     grade: student.grade,
     className: getStudentClassNames(student).join(", "),
-    loginId: student.loginId,
+    loginId: student.loginId || "",
     password: student.temporaryPassword || "",
     classroomCode: student.classroomCode || "",
-    status: student.temporaryPassword ? "확인 가능" : "비밀번호 재설정 필요",
+    status: !student.loginId ? "아이디 미발급" : student.temporaryPassword ? "확인 가능" : "비밀번호 재설정 필요",
   }));
 }
 
@@ -2173,10 +2240,12 @@ function downloadSavedStudentCredentials() {
   const rows = savedStudentCredentialRows(targetStudents);
   const statusLabel = status === "전체" ? "전체 학생" : `${status}생`;
   const classLabel = className === "전체" ? "전체 반" : className;
-  if (!rows.length) return alert(`${classLabel}의 ${statusLabel} 중 발급된 학생 계정이 없습니다.`);
+  if (!rows.length) return alert(`${classLabel}의 ${statusLabel} 명단에 학생이 없습니다.`);
   const label = `${className === "전체" ? "전체반" : className}-${status === "전체" ? "전체학생" : `${status}생`}명단`;
   downloadStudentCredentials(rows, label);
-  alert(`${classLabel} · ${statusLabel} 아이디·임시비밀번호 명단 ${rows.length}명을 내려받았습니다.\n\n정규반과 특강반에 함께 등록된 학생은 양쪽 반 명단에 같은 아이디와 비밀번호로 포함됩니다.\n비밀번호가 비어 있는 학생은 ‘비밀번호 없는 학생 일괄 재설정’을 먼저 눌러주세요.`);
+  const unissuedCount = rows.filter((row) => row.status === "아이디 미발급").length;
+  const missingPasswordCount = rows.filter((row) => row.status === "비밀번호 재설정 필요").length;
+  alert(`${classLabel} · ${statusLabel} 전체 ${rows.length}명의 명단을 내려받았습니다.\n아이디 미발급 ${unissuedCount}명 · 비밀번호 재설정 필요 ${missingPasswordCount}명\n\n이제 미발급 또는 비밀번호가 비어 있는 학생도 명단에서 사라지지 않고 사유가 표시됩니다. 정규반과 특강반에 함께 등록된 학생은 양쪽 반 명단에 같은 정보로 포함됩니다.`);
 }
 
 function syncCredentialStatusFilters(value) {
@@ -2278,7 +2347,7 @@ async function importStudentCredentials(event) {
         }
         reprovisioned += 1;
       }
-      state.students = state.students.map((item) => item.id === student.id ? { ...item, loginId, temporaryPassword: password } : item);
+      state.students = state.students.map((item) => item.id === student.id ? { ...item, loginId, temporaryPassword: password, credentialUpdatedAt: Date.now() } : item);
       restored += 1;
     }
     saveState({ localOnly: true });
@@ -2317,7 +2386,7 @@ async function resetMissingStudentPasswords() {
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || String(response.status));
-        state.students = state.students.map((item) => item.id === student.id ? { ...item, temporaryPassword: password } : item);
+        state.students = state.students.map((item) => item.id === student.id ? { ...item, temporaryPassword: password, credentialUpdatedAt: Date.now() } : item);
         results.push({ ...savedStudentCredentialRows([student])[0], password, status: "재설정 완료" });
       } catch (error) {
         results.push({ ...savedStudentCredentialRows([student])[0], password: "", status: `실패: ${error.message}` });
@@ -2380,7 +2449,7 @@ async function provisionUnissuedStudentAccounts() {
         }
         if (response.ok) {
           state.students = state.students.map((student) =>
-            student.id === account.student.id ? { ...student, loginId: account.loginId, temporaryPassword: account.password } : student,
+            student.id === account.student.id ? { ...student, loginId: account.loginId, temporaryPassword: account.password, credentialUpdatedAt: Date.now() } : student,
           );
         }
         const current = state.students.find((student) => student.id === account.student.id) || account.student;
@@ -4381,6 +4450,7 @@ function syncStudentStatusDates() {
 async function saveStudentFromForm() {
   const id = $("#studentId").value || crypto.randomUUID();
   const existing = state.students.find((student) => student.id === id);
+  const enteredLoginId = $("#studentLoginIdInput").value.trim().toLowerCase();
   const selectedClassName = $("#classInput").value;
   const classInfo = getClassInfo(selectedClassName);
   const existingCodes = getClassroomCodeSet(id);
@@ -4400,8 +4470,13 @@ async function saveStudentFromForm() {
     studentPhone: $("#studentPhoneInput").value.trim(),
     parentPhone: $("#parentPhoneInput").value.trim(),
     classroomCode,
-    loginId: $("#studentLoginIdInput").value.trim().toLowerCase(),
-    temporaryPassword: existing?.temporaryPassword || "",
+    loginId: enteredLoginId,
+    temporaryPassword: enteredLoginId === String(existing?.loginId || "").trim().toLowerCase()
+      ? existing?.temporaryPassword || ""
+      : "",
+    credentialUpdatedAt: enteredLoginId !== String(existing?.loginId || "").trim().toLowerCase()
+      ? Date.now()
+      : existing?.credentialUpdatedAt || 0,
     subject: $("#subjectInput").value.trim() || classInfo?.subject || "",
     book: $("#bookInput").value.trim() || classInfo?.defaultBook || "",
     homework: $("#homeworkInput").value.trim(),
@@ -4439,7 +4514,7 @@ async function saveStudentFromForm() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "학생 계정을 만들지 못했습니다.");
-      state.students = state.students.map((item) => item.id === student.id ? { ...item, temporaryPassword } : item);
+      state.students = state.students.map((item) => item.id === student.id ? { ...item, temporaryPassword, credentialUpdatedAt: Date.now() } : item);
       saveState({ localOnly: true });
       await saveStateToServer();
       alert(`${student.name} 학생 계정을 만들었습니다.\n아이디: ${student.loginId}\n비밀번호는 학생에게 개별 전달해주세요.`);
