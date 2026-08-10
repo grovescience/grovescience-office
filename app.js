@@ -1476,8 +1476,9 @@ function scheduleCalendarClass(item) {
   if (item.kind === "class") return "calendar-class";
   if (item.kind === "makeup") return "calendar-makeup";
   if (item.type === "개인 일정") return "calendar-personal";
+  if (item.type === "학원 방학") return "calendar-vacation";
   if (String(item.type || "").startsWith("학교 ")) return "calendar-academic";
-  if (["학원 휴무", "학원 방학", "휴강", "수업 취소"].includes(item.type)) return "calendar-closed";
+  if (["학원 휴무", "휴강", "수업 취소"].includes(item.type)) return "calendar-closed";
   return "calendar-event";
 }
 
@@ -1597,7 +1598,7 @@ function scheduleEventActionButtons(item) {
 
 function renderScheduleAgenda() {
   const items = scheduleItemsForDate(selectedScheduleDate);
-  $("#scheduleAgenda").innerHTML = `<h3>${selectedScheduleDate} 일정 · 시간순</h3>` + (items.map((item) => `<article class="schedule-agenda-${item.kind} ${item.type === "개인 일정" ? "schedule-agenda-personal" : ""}"><span class="badge ${item.type === "개인 일정" ? "pink" : item.kind === "class" ? "" : "orange"}">${item.type}${scheduleRepeatMark(item)}</span><time>${scheduleTimeRange(item.time, item.endTime) || (String(item.type || "").startsWith("학교 ") ? "종일" : "시간 미정")}</time><strong>${item.title}${item.kind === "event" ? scheduleMoveText(item) : ""}</strong><small>${item.kind === "event" ? scheduleDatePeriodText(item) : ""}${item.memo || ""}</small>${scheduleEventActionButtons(item)}</article>`).join("") || `<div class="empty-state">등록된 일정이 없습니다.</div>`);
+  $("#scheduleAgenda").innerHTML = `<h3>${selectedScheduleDate} 일정 · 시간순</h3>` + (items.map((item) => `<article class="schedule-agenda-${item.kind} ${item.type === "개인 일정" ? "schedule-agenda-personal" : item.type === "학원 방학" ? "schedule-agenda-vacation" : ""}"><span class="badge ${item.type === "개인 일정" ? "pink" : item.type === "학원 방학" ? "blue" : item.kind === "class" ? "" : "orange"}">${item.type}${scheduleRepeatMark(item)}</span><time>${scheduleTimeRange(item.time, item.endTime) || (String(item.type || "").startsWith("학교 ") ? "종일" : "시간 미정")}</time><strong>${item.title}${item.kind === "event" ? scheduleMoveText(item) : ""}</strong><small>${item.kind === "event" ? scheduleDatePeriodText(item) : ""}${item.memo || ""}</small>${scheduleEventActionButtons(item)}</article>`).join("") || `<div class="empty-state">등록된 일정이 없습니다.</div>`);
 }
 
 function openDashboardStudents() {
