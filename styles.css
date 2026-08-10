@@ -2287,8 +2287,13 @@ dialog::backdrop {
 .schedule-vacation-classes[hidden] { display: none; }
 .schedule-vacation-classes > strong { color: #a33c32; font-size: 13px; }
 .schedule-vacation-classes > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.schedule-vacation-classes > .schedule-vacation-overrides { display: grid; gap: 7px; width: 100%; }
 .schedule-vacation-classes label { display: flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 10px; border: 1px solid #efc7c2; border-radius: 8px; background: #fff; color: #87332c; font-size: 12px; font-weight: 800; cursor: pointer; }
 .schedule-vacation-classes input { width: 16px; height: 16px; margin: 0; }
+.schedule-vacation-overrides .vacation-override-row { display: grid; grid-template-columns: minmax(150px, 1fr) 150px 130px 130px; gap: 7px; align-items: center; padding: 8px; border: 1px dashed #e7b4ae; border-radius: 8px; background: #fff; }
+.schedule-vacation-overrides .vacation-override-row strong { color: #87332c; font-size: 12px; }
+.schedule-vacation-overrides .vacation-override-row label { display: grid; gap: 3px; min-height: 0; padding: 0; border: 0; color: var(--muted); cursor: default; }
+.schedule-vacation-overrides .vacation-override-row input { width: 100%; height: 34px; }
 .schedule-vacation-classes > span { color: var(--muted); font-size: 12px; }
 .schedule-agenda { margin-top: 16px; display: grid; gap: 8px; }
 .schedule-agenda h3 { margin: 0 0 4px; }
@@ -2306,6 +2311,8 @@ dialog::backdrop {
   .schedule-editor-actions button { flex: 1; }
   .schedule-move-fields { grid-template-columns: 1fr 1fr; }
   .schedule-move-fields > strong, .schedule-move-fields > span { grid-column: 1 / -1; }
+  .schedule-vacation-overrides .vacation-override-row { grid-template-columns: 1fr 1fr; }
+  .schedule-vacation-overrides .vacation-override-row > strong { grid-column: 1 / -1; }
 }
 
 @media (max-width: 640px) {
@@ -2313,6 +2320,7 @@ dialog::backdrop {
   .calendar-day { min-height: 96px; padding: 5px; }
   .calendar-day small { font-size: 10px; }
   .schedule-editor, .schedule-agenda article { grid-template-columns: 1fr; }
+  .schedule-vacation-overrides .vacation-override-row { grid-template-columns: 1fr; }
   .schedule-editor .wide { grid-column: 1; }
 }
 

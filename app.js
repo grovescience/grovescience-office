@@ -196,6 +196,11 @@ function normalizeState(saved) {
     vacationOperatingClassNames: Array.isArray(event.vacationOperatingClassNames)
       ? [...new Set(event.vacationOperatingClassNames.filter(Boolean))]
       : [],
+    vacationClassOverrides: Object.fromEntries(Object.entries(event.vacationClassOverrides || {}).map(([className, override]) => [className, {
+      date: normalizeDateValue(override?.date) || "",
+      time: String(override?.time || ""),
+      endTime: String(override?.endTime || ""),
+    }]).filter(([className, override]) => className && (override.date || override.time || override.endTime))),
     moveToDate: event.moveToDate || "", moveToTime: event.moveToTime || "", moveToEndTime: event.moveToEndTime || "", createdAt: event.createdAt || Date.now(),
     updatedAt: event.updatedAt || event.createdAt || Date.now(),
   })).filter((event) => Number(next.scheduleEventTombstones[event.id] || 0) < Number(event.updatedAt || event.createdAt || 0));
@@ -1078,6 +1083,7 @@ function bindEvents() {
     syncScheduleRepeatFields();
     syncScheduleVacationFields();
   });
+  $("#scheduleVacationClassChecks").addEventListener("change", () => renderScheduleVacationClassOverrides());
   $("#scheduleRepeatInput").addEventListener("change", syncScheduleRepeatFields);
 
   $("#studentForm").addEventListener("submit", (event) => {
@@ -1525,12 +1531,25 @@ function scheduleItemsForDate(dateValue) {
   );
   const vacationOperatingClasses = new Set(vacationEvents.flatMap((item) => item.vacationOperatingClassNames || []));
   const classItems = classes
-    .filter((item) =>
-      isClassActiveOnDate(item, dateValue)
-      && getClassWeekdays(item).includes(weekday)
-      && (!vacationEvents.length || vacationOperatingClasses.has(item.name)),
-    )
-    .map((item) => ({ kind: "class", type: "수업", title: item.name, time: extractScheduleTime(item.time), memo: item.time || "" }));
+    .filter((item) => {
+      if (!isClassActiveOnDate(item, dateValue)) return false;
+      if (!vacationEvents.length) return getClassWeekdays(item).includes(weekday);
+      if (!vacationOperatingClasses.has(item.name)) return false;
+      const override = [...vacationEvents].reverse().map((event) => event.vacationClassOverrides?.[item.name]).find(Boolean);
+      return override?.date ? override.date === dateValue : getClassWeekdays(item).includes(weekday);
+    })
+    .map((item) => {
+      const override = [...vacationEvents].reverse().map((event) => event.vacationClassOverrides?.[item.name]).find(Boolean) || {};
+      const changed = Boolean(override.date || override.time || override.endTime);
+      return {
+        kind: "class",
+        type: "수업",
+        title: item.name,
+        time: override.time || extractScheduleTime(item.time),
+        endTime: override.endTime || "",
+        memo: changed ? `방학 중 변경 · 원래 일정 ${item.time || "시간 미정"}` : item.time || "",
+      };
+    });
   const directEvents = state.scheduleEvents
     .filter((item) => scheduleEventOccursOnDate(item, dateValue))
     .map((item) => ({ ...item, kind: "event" }));
@@ -1579,12 +1598,32 @@ function syncScheduleRepeatFields() {
   if (!isPersonal) $("#scheduleRepeatInput").value = "none";
 }
 
-function renderScheduleVacationClassChecks(selectedNames = []) {
+function renderScheduleVacationClassChecks(selectedNames = [], overrides = {}) {
   const selected = new Set(selectedNames || []);
   const availableClasses = classes.filter((classInfo) => !isClassEnded(classInfo));
   $("#scheduleVacationClassChecks").innerHTML = availableClasses.length
     ? availableClasses.map((classInfo) => `<label><input type="checkbox" value="${classInfo.name}" ${selected.has(classInfo.name) ? "checked" : ""} />${classInfo.name}</label>`).join("")
     : `<span class="muted-text">현재 운영 중인 반이 없습니다.</span>`;
+  renderScheduleVacationClassOverrides(overrides);
+}
+
+function getVacationClassOverrideDraft() {
+  return Object.fromEntries($$("#scheduleVacationClassOverrides .vacation-override-row").map((row) => [row.dataset.className, {
+    date: row.querySelector('[data-field="date"]')?.value || "",
+    time: row.querySelector('[data-field="time"]')?.value || "",
+    endTime: row.querySelector('[data-field="endTime"]')?.value || "",
+  }]));
+}
+
+function renderScheduleVacationClassOverrides(overrides) {
+  const saved = overrides || getVacationClassOverrideDraft();
+  const selectedNames = getSelectedVacationOperatingClasses();
+  $("#scheduleVacationClassOverrides").innerHTML = selectedNames.length
+    ? selectedNames.map((className) => {
+        const override = saved[className] || {};
+        return `<div class="vacation-override-row" data-class-name="${className}"><strong>${className} 일정 변경(선택)</strong><label>진행일<input data-field="date" type="date" value="${override.date || ""}" /></label><label>시작<input data-field="time" type="time" value="${override.time || ""}" /></label><label>종료<input data-field="endTime" type="time" value="${override.endTime || ""}" /></label></div>`;
+      }).join("")
+    : "";
 }
 
 function syncScheduleVacationFields() {
@@ -1595,6 +1634,10 @@ function syncScheduleVacationFields() {
 
 function getSelectedVacationOperatingClasses() {
   return $$("#scheduleVacationClassChecks input:checked").map((input) => input.value);
+}
+
+function getVacationClassOverrides() {
+  return Object.fromEntries(Object.entries(getVacationClassOverrideDraft()).filter(([, override]) => override.date || override.time || override.endTime));
 }
 
 function getSelectedScheduleRepeatWeekdays() {
@@ -1691,7 +1734,13 @@ async function addScheduleEvent() {
   const repeatType = type === "개인 일정" ? $("#scheduleRepeatInput").value : "none";
   const repeatWeekdays = repeatType === "custom" ? getSelectedScheduleRepeatWeekdays() : [];
   const vacationOperatingClassNames = type === "학원 방학" ? getSelectedVacationOperatingClasses() : [];
+  const vacationClassOverrides = type === "학원 방학" ? getVacationClassOverrides() : {};
   if (repeatType === "custom" && !repeatWeekdays.length) return alert("반복할 요일을 한 개 이상 선택해주세요.");
+  for (const [className, override] of Object.entries(vacationClassOverrides)) {
+    if ((override.time || override.endTime) && !override.date) return alert(`${className}의 변경 시간을 입력하려면 진행일도 선택해주세요.`);
+    if (override.date && (override.date < date || override.date > (scheduleEndDate || date))) return alert(`${className}의 진행일은 학원 방학 기간 안에서 선택해주세요.`);
+    if (override.time && override.endTime && override.endTime <= override.time) return alert(`${className}의 종료시간은 시작시간보다 늦게 선택해주세요.`);
+  }
   const moveToDate = ["휴강", "수업 취소"].includes(type) ? $("#scheduleMoveDateInput").value : "";
   if (moveToDate && moveToDate === date) return alert("보강일은 기존 수업일과 다른 날짜로 선택해주세요.");
   const time = $("#scheduleTimeInput").value, endTime = $("#scheduleEndTimeInput").value;
@@ -1701,7 +1750,7 @@ async function addScheduleEvent() {
   if (moveToTime && moveToEndTime && moveToEndTime <= moveToTime) return alert("보강 종료시간은 보강 시작시간보다 늦게 선택해주세요.");
   const existing = state.scheduleEvents.find((item) => item.id === editingScheduleEventId);
   const updatedAt = Date.now();
-  const eventRecord = { id: existing?.id || crypto.randomUUID(), date, endDate: scheduleEndDate, type, title, time, endTime, memo: $("#scheduleMemoInput").value.trim(), repeatType, repeatWeekdays, vacationOperatingClassNames, moveToDate, moveToTime, moveToEndTime, createdAt: existing?.createdAt || updatedAt, updatedAt };
+  const eventRecord = { id: existing?.id || crypto.randomUUID(), date, endDate: scheduleEndDate, type, title, time, endTime, memo: $("#scheduleMemoInput").value.trim(), repeatType, repeatWeekdays, vacationOperatingClassNames, vacationClassOverrides, moveToDate, moveToTime, moveToEndTime, createdAt: existing?.createdAt || updatedAt, updatedAt };
   delete state.scheduleEventTombstones[eventRecord.id];
   if (existing) state.scheduleEvents = state.scheduleEvents.map((item) => item.id === existing.id ? eventRecord : item);
   else state.scheduleEvents.push(eventRecord);
@@ -1720,7 +1769,7 @@ function editScheduleEvent(id) {
   $("#scheduleTypeInput").value = event.type || "학원 행사";
   $("#scheduleRepeatInput").value = event.repeatType || "none";
   setSelectedScheduleRepeatWeekdays(event.repeatWeekdays || []);
-  renderScheduleVacationClassChecks(event.vacationOperatingClassNames || []);
+  renderScheduleVacationClassChecks(event.vacationOperatingClassNames || [], event.vacationClassOverrides || {});
   $("#scheduleTimeInput").value = event.time || "";
   $("#scheduleEndTimeInput").value = event.endTime || "";
   $("#scheduleTitleInput").value = event.title || "";
