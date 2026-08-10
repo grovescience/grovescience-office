@@ -137,6 +137,13 @@
                 <button class="mini-button" id="calendarNextBtn" type="button">다음 달</button>
               </div>
             </div>
+            <div class="schedule-recovery-controls" id="scheduleRecoveryControls" hidden>
+              <label class="field-label">자동 보관된 일정
+                <select id="scheduleRecoverySelect"></select>
+              </label>
+              <button class="secondary-button" id="restoreScheduleBackupBtn" type="button">선택한 일정으로 복구</button>
+              <span>일정을 추가·수정·삭제하기 전 상태를 서버에 최대 20개까지 보관합니다.</span>
+            </div>
             <div class="academy-calendar" id="academyCalendar"></div>
             <div class="schedule-editor">
               <label class="field-label">시작일<input id="scheduleDateInput" type="date" /></label>

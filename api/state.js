@@ -65,7 +65,9 @@ function protectStoredStudentCredentials(incomingState = {}, storedState = {}) {
 }
 
 function scheduleEventVersion(event = {}) {
-  return Number(event.updatedAt || event.createdAt || 0);
+  const value = event.updatedAt || event.createdAt || 0;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : Date.parse(value) || 0;
 }
 
 function mergeStoredScheduleEvents(incomingState = {}, storedState = {}) {
@@ -220,6 +222,7 @@ export default async function handler(request, response) {
         })),
         scheduleEvents: state.scheduleEvents || [],
         scheduleEventTombstones: state.scheduleEventTombstones || {},
+        scheduleEventHistory: state.scheduleEventHistory || [],
       });
     }
     response.setHeader("Allow", "GET, POST");

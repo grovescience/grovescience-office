@@ -460,9 +460,13 @@ async function saveStateToServer() {
       const before = JSON.stringify({ events: state.scheduleEvents || [], tombstones: state.scheduleEventTombstones || {} });
       state.scheduleEvents = mergedSchedules.events;
       state.scheduleEventTombstones = mergedSchedules.tombstones;
+      state.scheduleEventHistory = Array.isArray(result.scheduleEventHistory) ? result.scheduleEventHistory.slice(0, 20) : state.scheduleEventHistory;
       if (before !== JSON.stringify({ events: mergedSchedules.events, tombstones: mergedSchedules.tombstones })) {
         localStorage.setItem(storageKey, JSON.stringify(state));
         renderScheduleCalendar();
+      } else {
+        localStorage.setItem(storageKey, JSON.stringify(state));
+        renderScheduleRecoveryOptions();
       }
     }
     return true;
@@ -696,7 +700,9 @@ function mergeListById(current = [], incoming = []) {
 }
 
 function scheduleEventVersion(event = {}) {
-  return Number(event.updatedAt || event.createdAt || 0);
+  const value = event.updatedAt || event.createdAt || 0;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : Date.parse(value) || 0;
 }
 
 function mergeScheduleEventState(leftState = {}, rightState = {}) {
@@ -1066,6 +1072,7 @@ function bindEvents() {
   $("#calendarTodayBtn").addEventListener("click", () => { calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1); selectScheduleDate(today()); });
   $("#addScheduleBtn").addEventListener("click", addScheduleEvent);
   $("#cancelScheduleEditBtn").addEventListener("click", cancelScheduleEdit);
+  $("#restoreScheduleBackupBtn").addEventListener("click", restoreScheduleBackup);
   $("#scheduleTypeInput").addEventListener("change", () => {
     syncScheduleMoveFields();
     syncScheduleRepeatFields();
@@ -1625,7 +1632,46 @@ function renderScheduleCalendar() {
     cells.push(`<button class="calendar-day ${key === today() ? "today" : ""} ${key === selectedScheduleDate ? "selected" : ""}" type="button" onclick="selectScheduleDate('${key}')"><span>${day}</span>${items.slice(0, 5).map((item) => `<small class="${scheduleCalendarClass(item)}">${scheduleTimeRange(item.time, item.endTime) ? `${scheduleTimeRange(item.time, item.endTime)} ` : ""}${item.title}${item.kind === "event" ? `${scheduleRepeatMark(item)}${scheduleMoveText(item)}` : ""}</small>`).join("")}${items.length > 5 ? `<small class="calendar-more">+${items.length - 5}개 더보기</small>` : ""}</button>`);
   }
   $("#academyCalendar").innerHTML = cells.join("");
+  renderScheduleRecoveryOptions();
   renderScheduleAgenda();
+}
+
+function scheduleBackupLabel(snapshot, index) {
+  const date = new Date(snapshot.savedAt || 0);
+  const savedAt = Number.isNaN(date.getTime())
+    ? `백업 ${index + 1}`
+    : new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+  return `${savedAt} · 일정 ${Array.isArray(snapshot.scheduleEvents) ? snapshot.scheduleEvents.length : 0}개`;
+}
+
+function renderScheduleRecoveryOptions() {
+  const history = Array.isArray(state.scheduleEventHistory) ? state.scheduleEventHistory : [];
+  const controls = $("#scheduleRecoveryControls");
+  if (!controls) return;
+  controls.hidden = history.length === 0;
+  $("#scheduleRecoverySelect").innerHTML = history.map((snapshot, index) => `<option value="${index}">${scheduleBackupLabel(snapshot, index)}</option>`).join("");
+}
+
+async function restoreScheduleBackup() {
+  const history = Array.isArray(state.scheduleEventHistory) ? state.scheduleEventHistory : [];
+  const index = Number($("#scheduleRecoverySelect").value);
+  const snapshot = history[index];
+  if (!snapshot) return alert("복구할 일정 백업을 선택해주세요.");
+  const backupEvents = Array.isArray(snapshot.scheduleEvents) ? snapshot.scheduleEvents : [];
+  if (!confirm(`${scheduleBackupLabel(snapshot, index)} 상태로 복구할까요?\n현재 일정도 자동 보관되므로 다시 되돌릴 수 있습니다.`)) return;
+  const restoredAt = Date.now();
+  const restoredIds = new Set(backupEvents.map((event) => event.id));
+  const tombstones = { ...(state.scheduleEventTombstones || {}) };
+  (state.scheduleEvents || []).forEach((event) => {
+    if (!restoredIds.has(event.id)) tombstones[event.id] = restoredAt;
+  });
+  state.scheduleEvents = backupEvents.map((event, eventIndex) => ({ ...event, updatedAt: restoredAt + eventIndex + 1 }));
+  state.scheduleEvents.forEach((event) => delete tombstones[event.id]);
+  state.scheduleEventTombstones = tombstones;
+  saveState({ localOnly: true });
+  renderScheduleCalendar();
+  if (await saveStateToServer()) alert("선택한 일정 백업으로 복구했습니다.");
+  else alert(`일정은 이 컴퓨터에서 복구했지만 온라인 저장에 실패했습니다.\n${lastServerSaveError || "잠시 후 다시 시도해주세요."}`);
 }
 
 function selectScheduleDate(value) {
