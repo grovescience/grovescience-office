@@ -1414,7 +1414,8 @@ function extractScheduleTime(value) {
 }
 
 function scheduleSortValue(item) {
-  return item.time || "99:99";
+  const priority = item.type === "학원 방학" ? "0" : "1";
+  return `${priority}|${item.time || "99:99"}`;
 }
 
 function scheduleTimeRange(start, end) {
