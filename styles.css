@@ -744,6 +744,11 @@ td {
   color: #9a3f22;
 }
 
+.badge.yellow {
+  background: #fff0ad;
+  color: #765000;
+}
+
 .badge.blue {
   background: #e8f1ff;
   color: #285a9c;
@@ -2265,13 +2270,13 @@ dialog::backdrop {
 .calendar-day.today > span { color: var(--primary); font-weight: 800; }
 .calendar-day.outside { background: transparent; border-color: transparent; }
 .calendar-day small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 4px; padding: 2px 4px; }
-.calendar-class { background: #edf7f1; color: #276648; }
+.calendar-class { background: #edf7f1; color: #276648; font-weight: 800; }
 .calendar-event { background: #fff0dd; color: #96540b; }
 .calendar-personal { background: #ffe2d5; color: #9a3f22; font-weight: 800; }
 .calendar-academic { background: #eef3ff; color: #3f5ca8; font-weight: 800; }
 .calendar-vacation { background: #dfeeff; color: #285a9c; font-weight: 800; }
 .calendar-closed { background: #fff0ef; color: #a33c32; font-weight: 800; }
-.calendar-makeup { background: #fbe9f0; color: #a34668; font-weight: 800; }
+.calendar-makeup { background: #fff0ad; color: #765000; font-weight: 800; }
 .calendar-more { color: var(--muted); font-weight: 800; }
 .schedule-editor { display: grid; grid-template-columns: 125px 125px 130px 155px 100px 100px minmax(150px, 1fr) minmax(140px, 1fr) auto; gap: 10px; align-items: end; margin-top: 18px; }
 .schedule-recovery-controls { display: grid; grid-template-columns: minmax(260px, 420px) auto minmax(220px, 1fr); gap: 10px; align-items: end; margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #f7faf5; }
@@ -2308,7 +2313,7 @@ dialog::backdrop {
 .schedule-agenda h3 { margin: 0 0 4px; }
 .schedule-agenda article { display: grid; grid-template-columns: auto 115px minmax(160px, 1fr) minmax(120px, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; }
 .schedule-agenda time { font-weight: 800; color: var(--green); }
-.schedule-agenda-makeup { background: #fff7fa; border-color: #efcddd !important; }
+.schedule-agenda-makeup { background: #fffaf0; border-color: #e8c75a !important; }
 .schedule-agenda-personal { background: #fff4ef; border-color: #f4bfa8 !important; }
 .schedule-agenda-vacation { background: #f3f8ff; border-color: #bfd6f3 !important; }
 .class-schedule-move-dialog-card { width: min(760px, calc(100vw - 32px)); }

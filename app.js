@@ -2077,7 +2077,7 @@ function scheduleEventActionButtons(item) {
 function scheduleAgendaBadgeClass(item) {
   if (item.type === "개인 일정") return "coral";
   if (item.type === "학원 방학") return "blue";
-  if (item.kind === "makeup") return "pink";
+  if (item.kind === "makeup") return "yellow";
   if (item.kind === "class") return "";
   return "orange";
 }
