@@ -193,7 +193,7 @@ function normalizeState(saved) {
   next.scheduleEventHistory = Array.isArray(next.scheduleEventHistory) ? next.scheduleEventHistory.slice(0, 20) : [];
   next.scheduleEvents = (next.scheduleEvents || []).map((event) => ({
     id: event.id || crypto.randomUUID(), date: event.date || today(), endDate: event.endDate || "", type: event.type || "학원 행사",
-    title: event.title || "", memo: event.memo || "", time: event.time || "", endTime: event.endTime || "",
+    title: event.title || "", className: event.className || "", memo: event.memo || "", time: event.time || "", endTime: event.endTime || "",
     repeatType: event.type === "개인 일정" && ["weekly", "custom"].includes(event.repeatType) ? event.repeatType : "none",
     repeatWeekdays: Array.isArray(event.repeatWeekdays)
       ? [...new Set(event.repeatWeekdays.map(Number).filter((day) => day >= 0 && day <= 6))]
@@ -904,7 +904,7 @@ function getClassCycleSessionForDate(className, date) {
   const classInfo = getClassInfo(className);
   if (!classInfo?.cycleStartDate || !date) return 0;
   const movedLesson = state.scheduleEvents.find((event) =>
-    event.type === "정규반 수업 변경" && event.className === className && event.moveToDate === date,
+    isClassScheduleChangeEvent(event) && event.className === className && event.moveToDate === date,
   );
   const lessonDate = movedLesson?.date || date;
   if (lessonDate < classInfo.cycleStartDate) return 0;
@@ -931,7 +931,7 @@ function getStudentCycleSessionForDate(studentId, className, date) {
   const classInfo = getClassInfo(className);
   if (!classInfo) return Number(anchor.session || 1);
   const movedLesson = state.scheduleEvents.find((event) =>
-    event.type === "정규반 수업 변경" && event.className === className && event.moveToDate === date,
+    isClassScheduleChangeEvent(event) && event.className === className && event.moveToDate === date,
   );
   const lessonDate = movedLesson?.date || date;
   if (lessonDate < anchor.date) return 0;
@@ -1657,10 +1657,24 @@ function scheduleEventOccursOnDate(item, dateValue) {
   return item.date === dateValue || Boolean(item.endDate && item.date <= dateValue && item.endDate >= dateValue);
 }
 
-function getRegularClassScheduleMove(className, originalDate) {
+function isClassScheduleChangeEvent(event) {
+  return Boolean(event?.classScheduleChange) || ["정규반 수업 변경", "수업 일정 변경"].includes(event?.type);
+}
+
+function getClassScheduleMove(className, originalDate) {
   return state.scheduleEvents.find((event) =>
-    event.type === "정규반 수업 변경" && event.className === className && event.date === originalDate,
+    isClassScheduleChangeEvent(event) && event.className === className && event.date === originalDate,
   );
+}
+
+function getClassRoundForDate(className, dateValue) {
+  const classInfo = getClassInfo(className);
+  if (!classInfo || !dateValue) return 0;
+  if (classInfo.type === "방학특강") {
+    const index = getClassMeetingDates(classInfo).indexOf(dateValue);
+    return index >= 0 ? index + 1 : 0;
+  }
+  return getClassCycleSessionForDate(className, dateValue);
 }
 
 function scheduleItemsForDate(dateValue) {
@@ -1682,7 +1696,7 @@ function scheduleItemsForDate(dateValue) {
         const override = [...vacationEvents].reverse().map((event) => event.vacationClassOverrides?.[item.name]).find(Boolean);
         occurs = override?.date ? override.date === dateValue : occurs;
       }
-      return occurs && !getRegularClassScheduleMove(item.name, dateValue);
+      return occurs && !getClassScheduleMove(item.name, dateValue);
     })
     .map((item) => {
       const override = [...vacationEvents].reverse().map((event) => event.vacationClassOverrides?.[item.name]).find(Boolean) || {};
@@ -1696,28 +1710,32 @@ function scheduleItemsForDate(dateValue) {
         memo: changed ? `방학 중 변경 · 원래 일정 ${item.time || "시간 미정"}` : item.time || "",
         date: dateValue,
         className: item.name,
-        round: item.type === "정규반" ? getClassCycleSessionForDate(item.name, dateValue) : 0,
+        round: getClassRoundForDate(item.name, dateValue),
       };
     });
   const directEvents = state.scheduleEvents
     .filter((item) => scheduleEventOccursOnDate(item, dateValue))
-    .map((item) => item.type === "정규반 수업 변경" ? {
+    .filter((item) => !(isClassScheduleChangeEvent(item) && item.moveToDate === dateValue))
+    .map((item) => isClassScheduleChangeEvent(item) ? {
       ...item,
       kind: "event",
-      round: getClassCycleSessionForDate(item.className, item.date),
+      round: getClassRoundForDate(item.className, item.date),
       memo: `원래 수업일 · ${shortScheduleDate(item.moveToDate)} ${scheduleTimeRange(item.moveToTime, item.moveToEndTime)}로 변경${item.memo ? ` · ${item.memo}` : ""}`,
     } : { ...item, kind: "event" });
   const movedEvents = state.scheduleEvents
     .filter((item) => item.moveToDate === dateValue)
-    .map((item) => item.type === "정규반 수업 변경" ? {
+    .map((item) => isClassScheduleChangeEvent(item) ? {
       ...item,
       kind: "makeup",
-      type: "이동 수업",
+      classScheduleChange: true,
+      type: item.moveToDate === item.date ? "시간 변경 수업" : "이동 수업",
       time: item.moveToTime || item.time || "",
       endTime: item.moveToEndTime || item.endTime || "",
       title: item.className || item.title,
-      round: getClassCycleSessionForDate(item.className, item.date),
-      memo: `${shortScheduleDate(item.date)} 수업을 이 날짜로 변경${item.memo ? ` · ${item.memo}` : ""}`,
+      round: getClassRoundForDate(item.className, item.date),
+      memo: item.moveToDate === item.date
+        ? `이 날짜 수업시간 변경${item.memo ? ` · ${item.memo}` : ""}`
+        : `${shortScheduleDate(item.date)} 수업을 이 날짜로 변경${item.memo ? ` · ${item.memo}` : ""}`,
     } : {
       ...item,
       kind: "makeup",
@@ -1977,15 +1995,15 @@ function cancelScheduleEdit() {
 
 function openClassScheduleMove(className, originalDate, eventId = "") {
   const classInfo = getClassInfo(className);
-  if (!classInfo || classInfo.type !== "정규반") return alert("정규반 수업만 날짜를 변경할 수 있습니다.");
+  if (!classInfo) return alert("변경할 반 정보를 찾지 못했습니다.");
   const existing = eventId
     ? state.scheduleEvents.find((event) => event.id === eventId)
-    : getRegularClassScheduleMove(className, originalDate);
+    : getClassScheduleMove(className, originalDate);
   editingClassScheduleMoveId = existing?.id || "";
-  const round = getClassCycleSessionForDate(className, originalDate);
+  const round = getClassRoundForDate(className, originalDate);
   $("#classScheduleMoveSummary").textContent = `${className} · ${originalDate}${round ? ` · ${round}회차` : ""} · 원래 ${classInfo.time || "시간 미정"}`;
   $("#classScheduleOriginalDateInput").value = originalDate;
-  $("#classScheduleMoveDateInput").value = existing?.moveToDate || "";
+  $("#classScheduleMoveDateInput").value = existing?.moveToDate || originalDate;
   $("#classScheduleMoveTimeInput").value = existing?.moveToTime || extractScheduleTime(classInfo.time);
   $("#classScheduleMoveEndTimeInput").value = existing?.moveToEndTime || "";
   $("#classScheduleMoveMemoInput").value = existing?.memo || "";
@@ -2006,7 +2024,6 @@ async function saveClassScheduleMove() {
   const moveToEndTime = $("#classScheduleMoveEndTimeInput").value;
   const memo = $("#classScheduleMoveMemoInput").value.trim();
   if (!className || !originalDate || !moveToDate) return alert("변경할 수업일을 선택해주세요.");
-  if (moveToDate === originalDate) return alert("변경 수업일은 원래 수업일과 다른 날짜로 선택해주세요.");
   if (!moveToTime || !moveToEndTime) return alert("변경 시작시간과 종료시간을 모두 입력해주세요.");
   if (moveToEndTime <= moveToTime) return alert("변경 종료시간은 시작시간보다 늦어야 합니다.");
   const classInfo = getClassInfo(className);
@@ -2016,7 +2033,7 @@ async function saveClassScheduleMove() {
     id: existing?.id || crypto.randomUUID(),
     date: originalDate,
     endDate: "",
-    type: "정규반 수업 변경",
+    type: "수업 일정 변경",
     title: `${className} 수업 변경`,
     className,
     time: extractScheduleTime(classInfo?.time),
@@ -2052,7 +2069,7 @@ async function deleteScheduleEvent(id) {
 
 function scheduleEventActionButtons(item) {
   if (item.kind === "class") return `<div class="schedule-agenda-actions"><button class="mini-button" type="button" onclick="openClassScheduleMove('${item.className}', '${item.date}')">수업 변경</button></div>`;
-  if (item.kind === "event" && item.type === "정규반 수업 변경") return `<div class="schedule-agenda-actions"><button class="mini-button" type="button" onclick="openClassScheduleMove('${item.className}', '${item.date}', '${item.id}')">변경 수정</button><button class="mini-button danger" type="button" onclick="deleteScheduleEvent('${item.id}')">변경 취소</button></div>`;
+  if (["event", "makeup"].includes(item.kind) && isClassScheduleChangeEvent(item)) return `<div class="schedule-agenda-actions"><button class="mini-button" type="button" onclick="openClassScheduleMove('${item.className}', '${item.date}', '${item.id}')">변경 수정</button><button class="mini-button danger" type="button" onclick="deleteScheduleEvent('${item.id}')">변경 취소</button></div>`;
   if (item.kind !== "event") return "";
   return `<div class="schedule-agenda-actions"><button class="mini-button" type="button" onclick="editScheduleEvent('${item.id}')">수정</button><button class="mini-button danger" type="button" onclick="deleteScheduleEvent('${item.id}')">삭제</button></div>`;
 }
