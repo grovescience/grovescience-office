@@ -754,6 +754,11 @@ td {
   color: #285a9c;
 }
 
+.badge.purple {
+  background: #eee7ff;
+  color: #5d3ca6;
+}
+
 .row-actions {
   display: flex;
   gap: 6px;
@@ -2303,7 +2308,7 @@ dialog::backdrop {
 .calendar-class { background: #edf7f1; color: #276648; font-weight: 800; }
 .calendar-event { background: #fff0dd; color: #96540b; }
 .calendar-personal { background: #ffe2d5; color: #9a3f22; font-weight: 800; }
-.calendar-academic { background: #eef3ff; color: #3f5ca8; font-weight: 800; }
+.calendar-academic { background: #eee7ff; color: #5d3ca6; font-weight: 800; }
 .calendar-vacation { background: #dfeeff; color: #285a9c; font-weight: 800; }
 .calendar-closed { background: #fff0ef; color: #a33c32; font-weight: 800; }
 .calendar-makeup { background: #fff0ad; color: #765000; font-weight: 800; }
@@ -2346,6 +2351,7 @@ dialog::backdrop {
 .schedule-agenda-makeup { background: #fffaf0; border-color: #e8c75a !important; }
 .schedule-agenda-personal { background: #fff4ef; border-color: #f4bfa8 !important; }
 .schedule-agenda-vacation { background: #f3f8ff; border-color: #bfd6f3 !important; }
+.schedule-agenda-academic { background: #faf7ff; border-color: #cfc0f2 !important; }
 .class-schedule-move-dialog-card { width: min(760px, calc(100vw - 32px)); }
 .class-schedule-move-summary { margin: 0 0 16px; padding: 12px 14px; border: 1px solid #d7def5; border-radius: 10px; background: #f7f8ff; color: #4056a1; font-weight: 800; }
 

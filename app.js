@@ -193,7 +193,7 @@ function normalizeState(saved) {
   next.scheduleEventHistory = Array.isArray(next.scheduleEventHistory) ? next.scheduleEventHistory.slice(0, 20) : [];
   next.scheduleEvents = (next.scheduleEvents || []).map((event) => ({
     id: event.id || crypto.randomUUID(), date: event.date || today(), endDate: event.endDate || "", type: event.type || "학원 행사",
-    title: event.title || "", className: event.className || "", memo: event.memo || "", time: event.time || "", endTime: event.endTime || "",
+    title: event.title || "", className: event.className || "", academicTarget: event.academicTarget || "", memo: event.memo || "", time: event.time || "", endTime: event.endTime || "",
     repeatType: event.type === "개인 일정" && ["weekly", "custom"].includes(event.repeatType) ? event.repeatType : "none",
     repeatWeekdays: Array.isArray(event.repeatWeekdays)
       ? [...new Set(event.repeatWeekdays.map(Number).filter((day) => day >= 0 && day <= 6))]
@@ -1083,6 +1083,7 @@ function setup() {
   syncScheduleMoveFields();
   syncScheduleRepeatFields();
   syncScheduleVacationFields();
+  syncScheduleAcademicFields();
   syncAnnouncementScopeFields();
 
   bindEvents();
@@ -1216,6 +1217,7 @@ function bindEvents() {
     syncScheduleMoveFields();
     syncScheduleRepeatFields();
     syncScheduleVacationFields();
+    syncScheduleAcademicFields();
   });
   $("#scheduleVacationClassChecks").addEventListener("change", () => renderScheduleVacationClassOverrides());
   $("#scheduleRepeatInput").addEventListener("change", syncScheduleRepeatFields);
@@ -1783,6 +1785,20 @@ function syncScheduleRepeatFields() {
   if (!isPersonal) $("#scheduleRepeatInput").value = "none";
 }
 
+function isAcademicScheduleType(type) {
+  return String(type || "").startsWith("학교 ");
+}
+
+function syncScheduleAcademicFields() {
+  const isAcademic = isAcademicScheduleType($("#scheduleTypeInput")?.value);
+  $("#scheduleAcademicTargetField").hidden = !isAcademic;
+  if (!isAcademic) $("#scheduleAcademicTargetInput").value = "";
+}
+
+function scheduleAcademicTargetMark(item) {
+  return item.academicTarget ? ` · ${item.academicTarget}` : "";
+}
+
 function renderScheduleVacationClassChecks(selectedNames = [], overrides = {}) {
   const selected = new Set(selectedNames || []);
   const availableClasses = classes.filter((classInfo) => !isClassEnded(classInfo));
@@ -1843,7 +1859,7 @@ function scheduleCalendarClass(item) {
   if (item.kind === "makeup") return "calendar-makeup";
   if (item.type === "개인 일정") return "calendar-personal";
   if (item.type === "학원 방학") return "calendar-vacation";
-  if (String(item.type || "").startsWith("학교 ")) return "calendar-academic";
+  if (isAcademicScheduleType(item.type)) return "calendar-academic";
   if (["학원 휴무", "휴강", "수업 취소"].includes(item.type)) return "calendar-closed";
   return "calendar-event";
 }
@@ -1857,7 +1873,7 @@ function renderScheduleCalendar() {
   for (let day = 1; day <= lastDate; day += 1) {
     const date = new Date(year, month, day), key = dateKey(date);
     const items = scheduleItemsForDate(key);
-    cells.push(`<button class="calendar-day ${key === today() ? "today" : ""} ${key === selectedScheduleDate ? "selected" : ""}" type="button" onclick="selectScheduleDate('${key}')"><span>${day}</span>${items.slice(0, 5).map((item) => `<small class="${scheduleCalendarClass(item)}">${scheduleTimeRange(item.time, item.endTime) ? `${scheduleTimeRange(item.time, item.endTime)} ` : ""}${item.title}${item.round ? ` ${item.round}회차` : ""}${item.kind === "event" ? `${scheduleRepeatMark(item)}${scheduleMoveText(item)}` : ""}</small>`).join("")}${items.length > 5 ? `<small class="calendar-more">+${items.length - 5}개 더보기</small>` : ""}</button>`);
+    cells.push(`<button class="calendar-day ${key === today() ? "today" : ""} ${key === selectedScheduleDate ? "selected" : ""}" type="button" onclick="selectScheduleDate('${key}')"><span>${day}</span>${items.slice(0, 5).map((item) => `<small class="${scheduleCalendarClass(item)}">${scheduleTimeRange(item.time, item.endTime) ? `${scheduleTimeRange(item.time, item.endTime)} ` : ""}${item.title}${item.kind === "event" ? scheduleAcademicTargetMark(item) : ""}${item.round ? ` ${item.round}회차` : ""}${item.kind === "event" ? `${scheduleRepeatMark(item)}${scheduleMoveText(item)}` : ""}</small>`).join("")}${items.length > 5 ? `<small class="calendar-more">+${items.length - 5}개 더보기</small>` : ""}</button>`);
   }
   $("#academyCalendar").innerHTML = cells.join("");
   renderScheduleRecoveryOptions();
@@ -1935,7 +1951,8 @@ async function addScheduleEvent() {
   if (moveToTime && moveToEndTime && moveToEndTime <= moveToTime) return alert("보강 종료시간은 보강 시작시간보다 늦게 선택해주세요.");
   const existing = state.scheduleEvents.find((item) => item.id === editingScheduleEventId);
   const updatedAt = Date.now();
-  const eventRecord = { id: existing?.id || crypto.randomUUID(), date, endDate: scheduleEndDate, type, title, time, endTime, memo: $("#scheduleMemoInput").value.trim(), repeatType, repeatWeekdays, vacationOperatingClassNames, vacationClassOverrides, moveToDate, moveToTime, moveToEndTime, createdAt: existing?.createdAt || updatedAt, updatedAt };
+  const academicTarget = isAcademicScheduleType(type) ? $("#scheduleAcademicTargetInput").value.trim() : "";
+  const eventRecord = { id: existing?.id || crypto.randomUUID(), date, endDate: scheduleEndDate, type, title, academicTarget, time, endTime, memo: $("#scheduleMemoInput").value.trim(), repeatType, repeatWeekdays, vacationOperatingClassNames, vacationClassOverrides, moveToDate, moveToTime, moveToEndTime, createdAt: existing?.createdAt || updatedAt, updatedAt };
   delete state.scheduleEventTombstones[eventRecord.id];
   if (existing) state.scheduleEvents = state.scheduleEvents.map((item) => item.id === existing.id ? eventRecord : item);
   else state.scheduleEvents.push(eventRecord);
@@ -1952,6 +1969,7 @@ function editScheduleEvent(id) {
   $("#scheduleDateInput").value = event.date || today();
   $("#scheduleEndDateInput").value = event.endDate || "";
   $("#scheduleTypeInput").value = event.type || "학원 행사";
+  $("#scheduleAcademicTargetInput").value = event.academicTarget || "";
   $("#scheduleRepeatInput").value = event.repeatType || "none";
   setSelectedScheduleRepeatWeekdays(event.repeatWeekdays || []);
   renderScheduleVacationClassChecks(event.vacationOperatingClassNames || [], event.vacationClassOverrides || {});
@@ -1967,6 +1985,7 @@ function editScheduleEvent(id) {
   syncScheduleMoveFields();
   syncScheduleRepeatFields();
   syncScheduleVacationFields();
+  syncScheduleAcademicFields();
   document.querySelector(".schedule-editor")?.scrollIntoView({ behavior: "smooth", block: "center" });
   $("#scheduleTitleInput").focus({ preventScroll: true });
 }
@@ -1976,6 +1995,7 @@ function clearScheduleEditor(date = selectedScheduleDate) {
   $("#scheduleDateInput").value = date || today();
   $("#scheduleEndDateInput").value = "";
   $("#scheduleTypeInput").value = "학원 행사";
+  $("#scheduleAcademicTargetInput").value = "";
   $("#scheduleRepeatInput").value = "none";
   setSelectedScheduleRepeatWeekdays([]);
   renderScheduleVacationClassChecks([]);
@@ -1991,6 +2011,7 @@ function clearScheduleEditor(date = selectedScheduleDate) {
   syncScheduleMoveFields();
   syncScheduleRepeatFields();
   syncScheduleVacationFields();
+  syncScheduleAcademicFields();
 }
 
 function cancelScheduleEdit() {
@@ -2081,6 +2102,7 @@ function scheduleEventActionButtons(item) {
 function scheduleAgendaBadgeClass(item) {
   if (item.type === "개인 일정") return "coral";
   if (item.type === "학원 방학") return "blue";
+  if (isAcademicScheduleType(item.type)) return "purple";
   if (item.kind === "makeup") return "yellow";
   if (item.kind === "class") return "";
   return "orange";
@@ -2088,7 +2110,7 @@ function scheduleAgendaBadgeClass(item) {
 
 function renderScheduleAgenda() {
   const items = scheduleItemsForDate(selectedScheduleDate);
-  $("#scheduleAgenda").innerHTML = `<h3>${selectedScheduleDate} 일정 · 시간순</h3>` + (items.map((item) => `<article class="schedule-agenda-${item.kind} ${item.type === "개인 일정" ? "schedule-agenda-personal" : item.type === "학원 방학" ? "schedule-agenda-vacation" : ""}"><span class="badge ${scheduleAgendaBadgeClass(item)}">${item.type}${scheduleRepeatMark(item)}</span><time>${scheduleTimeRange(item.time, item.endTime) || (String(item.type || "").startsWith("학교 ") ? "종일" : "시간 미정")}</time><strong>${item.title}${item.round ? ` · ${item.round}회차` : ""}${item.kind === "event" ? scheduleMoveText(item) : ""}</strong><small>${item.kind === "event" ? scheduleDatePeriodText(item) : ""}${item.memo || ""}</small>${scheduleEventActionButtons(item)}</article>`).join("") || `<div class="empty-state">등록된 일정이 없습니다.</div>`);
+  $("#scheduleAgenda").innerHTML = `<h3>${selectedScheduleDate} 일정 · 시간순</h3>` + (items.map((item) => `<article class="schedule-agenda-${item.kind} ${item.type === "개인 일정" ? "schedule-agenda-personal" : item.type === "학원 방학" ? "schedule-agenda-vacation" : isAcademicScheduleType(item.type) ? "schedule-agenda-academic" : ""}"><span class="badge ${scheduleAgendaBadgeClass(item)}">${item.type}${scheduleRepeatMark(item)}</span><time>${scheduleTimeRange(item.time, item.endTime) || (isAcademicScheduleType(item.type) ? "종일" : "시간 미정")}</time><strong>${item.title}${item.kind === "event" ? scheduleAcademicTargetMark(item) : ""}${item.round ? ` · ${item.round}회차` : ""}${item.kind === "event" ? scheduleMoveText(item) : ""}</strong><small>${item.kind === "event" ? scheduleDatePeriodText(item) : ""}${item.memo || ""}</small>${scheduleEventActionButtons(item)}</article>`).join("") || `<div class="empty-state">등록된 일정이 없습니다.</div>`);
 }
 
 function openDashboardStudents() {
