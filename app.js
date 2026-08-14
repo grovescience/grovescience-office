@@ -225,7 +225,7 @@ function normalizeClassrooms(classrooms = []) {
       memberAccess: {},
       posts: (room.posts || []).map((post) => ({
         id: post.id || crypto.randomUUID(),
-        type: ["공지", "숙제", "유튜브 링크"].includes(post.type) ? post.type : "공지",
+        type: ["공지", "숙제", "유튜브 링크", "자료"].includes(post.type) ? post.type : "공지",
         title: post.title || "",
         content: post.content || "",
         link: post.link || "",
@@ -4648,7 +4648,7 @@ function renderClassroomPostCard(roomId, post, editable = false) {
   return `
     <article class="classroom-post-card">
       <div class="post-head">
-        <span class="badge ${post.type === "숙제" ? "orange" : ""}">${post.type}</span>
+        <span class="badge ${post.type === "숙제" ? "orange" : post.type === "자료" ? "blue" : ""}">${post.type}</span>
         <small>${post.openToAll ? "전체 공개 · " : ""}${post.lessonDate ? `수업일 ${formatLessonDate(post.lessonDate)} · ` : ""}${formatDateTime(post.createdAt)}</small>
       </div>
       <strong>${post.title}</strong>

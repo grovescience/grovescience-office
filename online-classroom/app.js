@@ -356,7 +356,7 @@ function renderPost(post) {
   return `
     <article class="post-card">
       <div class="post-head">
-        <span class="badge ${post.type === "숙제" ? "orange" : ""}">${post.type || "공지"}</span>
+        <span class="badge ${post.type === "숙제" ? "orange" : post.type === "자료" ? "blue" : ""}">${post.type || "공지"}</span>
         <small>${post.lessonDate ? `수업일 ${formatLessonDate(post.lessonDate)} · ` : ""}${formatDateTime(post.createdAt)}</small>
       </div>
       <strong>${post.title}</strong>

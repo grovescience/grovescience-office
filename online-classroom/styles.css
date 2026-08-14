@@ -380,6 +380,11 @@ a:focus-visible {
   color: #9a5a00;
 }
 
+.badge.blue {
+  background: #e8f1ff;
+  color: #285a9c;
+}
+
 .link-list {
   display: grid;
   gap: 8px;
