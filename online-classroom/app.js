@@ -82,9 +82,8 @@ function getIndividualYoutubeUrl(value = "") {
 }
 
 function getClassroomLinkLabel(link, index = 0) {
-  const title = link.title || `수업 링크 ${index + 1}`;
-  const url = String(link.url || "");
-  return /(?:youtube\.com|youtu\.be)/i.test(url) ? `${title} (유튜브 링크 바로가기)` : title;
+  const title = link.title || `링크 ${index + 1}`;
+  return `${title} 바로가기`;
 }
 
 async function setup() {

@@ -225,7 +225,7 @@ function normalizeClassrooms(classrooms = []) {
       memberAccess: {},
       posts: (room.posts || []).map((post) => ({
         id: post.id || crypto.randomUUID(),
-        type: ["공지", "숙제", "유튜브 링크", "자료"].includes(post.type) ? post.type : "공지",
+        type: normalizeClassroomPostType(post.type),
         title: post.title || "",
         content: post.content || "",
         link: post.link || "",
@@ -242,6 +242,12 @@ function normalizeClassrooms(classrooms = []) {
     normalizedRoom.memberAccess = normalizeClassroomMemberAccess(room, memberStudentIds);
     return normalizedRoom;
   });
+}
+
+function normalizeClassroomPostType(type = "") {
+  const text = String(type || "").trim();
+  if (text === "유튜브 링크") return "링크";
+  return ["공지", "숙제", "링크", "자료"].includes(text) ? text : "공지";
 }
 
 function compareClassroomPostsByLessonDate(left, right) {
@@ -4442,11 +4448,11 @@ function addYoutubeLinkRow(link = { title: "", url: "" }) {
   row.className = "youtube-link-row";
   const titleInput = document.createElement("input");
   titleInput.className = "youtube-title-input";
-  titleInput.placeholder = "수업 제목 예: 1강 힘과 운동";
+  titleInput.placeholder = "링크 제목 예: 정답지 / 1강 힘과 운동";
   titleInput.value = link.title || "";
   const urlInput = document.createElement("input");
   urlInput.className = "youtube-url-input";
-  urlInput.placeholder = "https://www.youtube.com/...";
+  urlInput.placeholder = "https://drive.google.com/... 또는 https://www.youtube.com/...";
   urlInput.value = link.url || "";
   const deleteButton = document.createElement("button");
   deleteButton.className = "mini-button danger";
@@ -4479,9 +4485,8 @@ function getYoutubeLinksFromForm() {
 }
 
 function getClassroomLinkLabel(link, index = 0) {
-  const title = link.title || `수업 링크 ${index + 1}`;
-  const url = String(link.url || "");
-  return /(?:youtube\.com|youtu\.be)/i.test(url) ? `${title} (유튜브 링크 바로가기)` : title;
+  const title = link.title || `링크 ${index + 1}`;
+  return `${title} 바로가기`;
 }
 
 async function saveClassroomPostFromForm() {
@@ -4521,7 +4526,7 @@ async function saveClassroomPostFromForm() {
   }
   const post = {
     id: postId,
-    type: $("#postTypeInput").value,
+    type: normalizeClassroomPostType($("#postTypeInput").value),
     title,
     links: youtubeLinks,
     link: youtubeLinks[0]?.url || "",
@@ -4564,7 +4569,7 @@ function editClassroomPost(roomId, postId) {
   if (!room || !post) return;
   $("#postClassroomSelect").value = roomId;
   $("#classroomPostIdInput").value = post.id;
-  $("#postTypeInput").value = post.type;
+  $("#postTypeInput").value = normalizeClassroomPostType(post.type);
   $("#postOpenToAllInput").checked = Boolean(post.openToAll);
   $("#postTitleInput").value = post.title;
   $("#postContentInput").value = post.content || "";
