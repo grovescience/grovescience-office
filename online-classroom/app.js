@@ -6,6 +6,7 @@ let currentStudentCode = "";
 let currentStudentData = null;
 let currentRoomId = "";
 const classroomImageApi = "https://grovescience-office-admin.vercel.app/api/classroom-images";
+const passwordEventApi = "https://grovescience-office-admin.vercel.app/api/student-password-events";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -199,7 +200,24 @@ async function changePassword(event) {
   if (signInError) return message.textContent = "현재 비밀번호가 맞지 않습니다.";
   const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
   if (error) return message.textContent = "비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.";
-  alert("비밀번호가 변경되었습니다. 다음 로그인부터 새 비밀번호를 사용하세요.");
+  let officeRecorded = false;
+  try {
+    const { data: refreshed } = await supabaseClient.auth.getSession();
+    const accessToken = refreshed.session?.access_token || "";
+    if (accessToken) {
+      const response = await fetch(passwordEventApi, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: "{}",
+      });
+      officeRecorded = response.ok;
+    }
+  } catch (recordError) {
+    officeRecorded = false;
+  }
+  alert(officeRecorded
+    ? "비밀번호가 변경되었습니다. 다음 로그인부터 새 비밀번호를 사용하세요. 선생님 교무실에도 변경 날짜와 시간이 기록되었습니다."
+    : "비밀번호는 변경되었지만 선생님 교무실에 변경 시간을 기록하지 못했습니다. 선생님께 알려주세요.");
   closePasswordChange();
 }
 

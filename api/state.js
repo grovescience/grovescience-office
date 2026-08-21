@@ -46,21 +46,55 @@ function resolveStoredCredentials(storedStudent = {}, incomingStudent = {}) {
   const loginId = preferredLoginId || fallbackLoginId;
   const preferredPassword = String(preferred.temporaryPassword || "");
   const fallbackPassword = String(fallback.temporaryPassword || "");
+  const preferredStatus = String(preferred.credentialStatus || (preferred.passwordChangedByStudentAt ? "student_changed" : preferredPassword ? "admin_set" : ""));
+  const fallbackStatus = String(fallback.credentialStatus || (fallback.passwordChangedByStudentAt ? "student_changed" : fallbackPassword ? "admin_set" : ""));
+  const studentChanged = preferredStatus === "student_changed";
+  const temporaryPassword = studentChanged
+    ? ""
+    : preferredPassword || (fallbackLoginId === loginId && fallbackStatus !== "student_changed" ? fallbackPassword : "");
   return {
     loginId,
-    temporaryPassword: preferredPassword || (fallbackLoginId === loginId ? fallbackPassword : ""),
+    temporaryPassword,
+    credentialStatus: studentChanged ? "student_changed" : preferredStatus || (temporaryPassword ? "admin_set" : fallbackStatus),
+    passwordChangedByStudentAt: studentChanged ? String(preferred.passwordChangedByStudentAt || fallback.passwordChangedByStudentAt || "") : "",
     credentialUpdatedAt: Math.max(storedUpdatedAt, incomingUpdatedAt),
   };
 }
 
 function protectStoredStudentCredentials(incomingState = {}, storedState = {}) {
   const storedById = new Map((storedState.students || []).map((student) => [student.id, student]));
+  const storedByLoginId = new Map((storedState.students || [])
+    .filter((student) => String(student.loginId || "").trim())
+    .map((student) => [String(student.loginId).trim().toLowerCase(), student]));
+  const storedVault = storedState.studentCredentialVault || {};
+  const students = (incomingState.students || []).map((student) => {
+    const loginId = String(student.loginId || "").trim().toLowerCase();
+    const storedStudent = storedById.get(student.id) || storedByLoginId.get(loginId) || storedVault[loginId];
+    return {
+      ...student,
+      ...resolveStoredCredentials(storedStudent, student),
+    };
+  });
+  const studentCredentialVault = { ...storedVault };
+  [...(storedState.students || []), ...students].forEach((student) => {
+    const loginId = String(student.loginId || "").trim().toLowerCase();
+    if (!loginId) return;
+    const existing = studentCredentialVault[loginId] || {};
+    const credentials = resolveStoredCredentials(existing, student);
+    if (!credentials.temporaryPassword && credentials.credentialStatus !== "student_changed" && !existing.temporaryPassword) return;
+    studentCredentialVault[loginId] = {
+      id: student.id || existing.id || "",
+      loginId,
+      temporaryPassword: credentials.temporaryPassword,
+      credentialStatus: credentials.credentialStatus,
+      passwordChangedByStudentAt: credentials.passwordChangedByStudentAt,
+      credentialUpdatedAt: credentials.credentialUpdatedAt,
+    };
+  });
   return {
     ...incomingState,
-    students: (incomingState.students || []).map((student) => ({
-      ...student,
-      ...resolveStoredCredentials(storedById.get(student.id), student),
-    })),
+    students,
+    studentCredentialVault,
   };
 }
 
@@ -218,6 +252,8 @@ export default async function handler(request, response) {
           id: student.id,
           loginId: student.loginId || "",
           temporaryPassword: student.temporaryPassword || "",
+          credentialStatus: student.credentialStatus || "",
+          passwordChangedByStudentAt: student.passwordChangedByStudentAt || "",
           credentialUpdatedAt: Number(student.credentialUpdatedAt || 0),
         })),
         scheduleEvents: state.scheduleEvents || [],
