@@ -311,6 +311,12 @@ function comparePostsByLessonDate(left, right) {
   return Number(right.updatedAt || right.createdAt || 0) - Number(left.updatedAt || left.createdAt || 0);
 }
 
+function normalizeStudentPostType(type = "") {
+  const text = String(type || "").trim();
+  if (["숙제", "링크", "유튜브 링크", "수업"].includes(text)) return "수업";
+  return ["공지", "자료"].includes(text) ? text : "공지";
+}
+
 function renderPosts() {
   const room = getAllowedRooms().find((item) => item.id === currentRoomId);
   $("#roomTitle").textContent = room ? displayOrchardOnText(room.name) : "게시글";
@@ -349,6 +355,7 @@ async function hydratePostImages() {
 }
 
 function renderPost(post) {
+  const postType = normalizeStudentPostType(post.type);
   const links = post.links || [];
   const linkList = links.length
     ? `<div class="link-list">
@@ -373,7 +380,7 @@ function renderPost(post) {
   return `
     <article class="post-card">
       <div class="post-head">
-        <span class="badge ${post.type === "숙제" ? "orange" : post.type === "자료" ? "blue" : ""}">${post.type || "공지"}</span>
+        <span class="badge ${postType === "수업" ? "orange" : postType === "자료" ? "blue" : ""}">${postType}</span>
         <small>${post.lessonDate ? `수업일 ${formatLessonDate(post.lessonDate)} · ` : ""}${formatDateTime(post.createdAt)}</small>
       </div>
       <strong>${post.title}</strong>

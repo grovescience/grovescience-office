@@ -251,8 +251,8 @@ function normalizeClassrooms(classrooms = []) {
 
 function normalizeClassroomPostType(type = "") {
   const text = String(type || "").trim();
-  if (text === "유튜브 링크") return "링크";
-  return ["공지", "숙제", "링크", "자료"].includes(text) ? text : "공지";
+  if (["숙제", "링크", "유튜브 링크", "수업"].includes(text)) return "수업";
+  return ["공지", "자료"].includes(text) ? text : "공지";
 }
 
 function compareClassroomPostsByLessonDate(left, right) {
@@ -4668,6 +4668,7 @@ function renderAdminClassroomPosts() {
 }
 
 function renderClassroomPostCard(roomId, post, editable = false) {
+  const postType = normalizeClassroomPostType(post.type);
   const links = normalizeYoutubeLinks(post.links, post.link);
   const linkList = links.length
     ? `<div class="youtube-link-view">
@@ -4692,7 +4693,7 @@ function renderClassroomPostCard(roomId, post, editable = false) {
   return `
     <article class="classroom-post-card">
       <div class="post-head">
-        <span class="badge ${post.type === "숙제" ? "orange" : post.type === "자료" ? "blue" : ""}">${post.type}</span>
+        <span class="badge ${postType === "수업" ? "orange" : postType === "자료" ? "blue" : ""}">${postType}</span>
         <small>${post.openToAll ? "전체 공개 · " : ""}${post.lessonDate ? `수업일 ${formatLessonDate(post.lessonDate)} · ` : ""}${formatDateTime(post.createdAt)}</small>
       </div>
       <strong>${post.title}</strong>
