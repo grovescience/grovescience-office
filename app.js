@@ -1171,6 +1171,7 @@ function bindEvents() {
   $("#classFilter").addEventListener("change", renderStudents);
   $("#statusFilter").addEventListener("change", renderStudents);
   $("#statusInput").addEventListener("change", syncStudentStatusDates);
+  $("#generateStudentPasswordBtn").addEventListener("click", fillGeneratedStudentPassword);
   $("#waitAutoAdvance").addEventListener("change", syncWaitAutoAdvanceFields);
   $("#waitGrade").addEventListener("change", suggestWaitNextClass);
   $("#waitGrade").addEventListener("change", syncWaitGradeCustomField);
@@ -5078,6 +5079,14 @@ function openStudentDialog(studentId = "") {
   $("#withdrawalDateInput").value = student?.withdrawalDate || (student?.retiredAt ? dateKey(new Date(student.retiredAt)) : "");
   $("#memoInput").value = student?.memo || "";
   $("#studentDialog").showModal();
+}
+
+function fillGeneratedStudentPassword() {
+  const input = $("#studentTempPasswordInput");
+  input.value = generateTemporaryPassword();
+  input.focus();
+  input.select();
+  $("#studentCredentialStatus").textContent = "현재 상태: 새 임시비밀번호가 입력되었습니다. 저장하면 학생 비밀번호가 변경됩니다.";
 }
 
 function syncStudentStatusDates() {

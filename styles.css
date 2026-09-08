@@ -2226,6 +2226,17 @@ dialog::backdrop {
   color: var(--ink);
 }
 
+.password-reset-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.password-reset-row .ghost-button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
 .form-grid .wide {
   grid-column: 1 / -1;
 }
