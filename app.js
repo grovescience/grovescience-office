@@ -16,6 +16,7 @@ let classes = defaultClasses.map((item) => ({ ...item }));
 
 const attendanceStates = ["출석", "결석", "지각", "조퇴", "보강"];
 const paymentStates = ["납부완료", "미납", "부분납부", "면제"];
+const paymentStartMonth = "2026-09";
 const homeworkStates = ["확인 전", "완료", "미완료", "보충 필요"];
 const storageKey = "orchardScienceOffice";
 const subjectChoices = ["실험과학", "과학독해", "교과과학", "탐구보고서", "방학특강"];
@@ -115,6 +116,7 @@ function normalizeState(saved) {
   next.studentCycleAnchors = next.studentCycleAnchors && typeof next.studentCycleAnchors === "object" ? next.studentCycleAnchors : {};
   next.scoreExams = Array.isArray(next.scoreExams) ? next.scoreExams : [];
   next.announcements = normalizeAnnouncements(next.announcements);
+  next.payments = normalizePayments(next.payments);
   next.classSettings = normalizeClassSettings(next.classSettings, next.customClasses);
   next.students = (next.students || []).map((student) => {
     const classInfo = getClassInfo(student.className);
@@ -253,6 +255,23 @@ function normalizeClassroomPostType(type = "") {
   const text = String(type || "").trim();
   if (["숙제", "링크", "유튜브 링크", "수업"].includes(text)) return "수업";
   return ["공지", "자료"].includes(text) ? text : "공지";
+}
+
+function normalizePayments(payments = {}) {
+  return Object.entries(payments || {}).reduce((result, [month, records]) => {
+    if (!/^\d{4}-\d{2}$/.test(month) || !records || typeof records !== "object") return result;
+    Object.entries(records).forEach(([studentId, payment]) => {
+      const status = payment?.status || "미납";
+      if (month < paymentStartMonth && status !== "납부완료") return;
+      result[month] = result[month] || {};
+      result[month][studentId] = {
+        ...payment,
+        status,
+        paidAt: normalizeDateValue(payment?.paidAt) || "",
+      };
+    });
+    return result;
+  }, {});
 }
 
 function compareClassroomPostsByLessonDate(left, right) {
@@ -805,7 +824,13 @@ function formatMoney(value) {
 }
 
 function currentMonth() {
-  return today().slice(0, 7);
+  const month = today().slice(0, 7);
+  return month < paymentStartMonth ? paymentStartMonth : month;
+}
+
+function normalizePaymentMonth(month = currentMonth()) {
+  const value = /^\d{4}-\d{2}$/.test(String(month || "")) ? String(month) : currentMonth();
+  return value < paymentStartMonth ? paymentStartMonth : value;
 }
 
 function today() {
@@ -1080,6 +1105,7 @@ function setup() {
 
   $("#attendanceDate").value = today();
   syncAttendanceWeekdayToDate();
+  $("#paymentMonth").min = paymentStartMonth;
   $("#paymentMonth").value = currentMonth();
   $("#consultingDate").value = today();
   $("#consultingClass").innerHTML = classOptions(true, true);
@@ -3222,6 +3248,11 @@ function setAttendanceMakeupDate(studentId, date, makeupDate) {
 }
 
 function renderPayments() {
+  const paymentMonthInput = $("#paymentMonth");
+  if (paymentMonthInput) {
+    paymentMonthInput.min = paymentStartMonth;
+    paymentMonthInput.value = normalizePaymentMonth(paymentMonthInput.value);
+  }
   const className = selectedPaymentClass;
   const students = sortStudentsByClassGradeName(state.students.filter((student) => studentBelongsToClass(student, className)));
   const filtered = filterPaymentStudents(students);
@@ -3327,7 +3358,7 @@ function renderPaymentRow(student) {
 }
 
 function getPayment(studentId) {
-  const month = $("#paymentMonth")?.value || currentMonth();
+  const month = normalizePaymentMonth($("#paymentMonth")?.value);
   return state.payments[month]?.[studentId] || { status: "미납" };
 }
 
@@ -3337,7 +3368,8 @@ function getBillingTuition(student) {
 }
 
 function setPayment(studentId, status) {
-  const month = $("#paymentMonth").value;
+  const month = normalizePaymentMonth($("#paymentMonth").value);
+  $("#paymentMonth").value = month;
   const previous = state.payments[month]?.[studentId] || {};
   state.payments[month] = state.payments[month] || {};
   state.payments[month][studentId] = { ...previous, status, paidAt: status === "납부완료" ? previous.paidAt || today() : "" };
@@ -3351,7 +3383,8 @@ function setPaymentPaid(studentId, checked) {
 }
 
 function setPaymentDate(studentId, paidAt) {
-  const month = $("#paymentMonth").value;
+  const month = normalizePaymentMonth($("#paymentMonth").value);
+  $("#paymentMonth").value = month;
   state.payments[month] = state.payments[month] || {};
   const previous = state.payments[month][studentId] || { status: "납부완료" };
   state.payments[month][studentId] = { ...previous, status: "납부완료", paidAt };
