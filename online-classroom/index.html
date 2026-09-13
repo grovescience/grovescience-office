@@ -84,9 +84,14 @@
             <div id="roomList"></div>
           </aside>
           <section class="post-panel">
-            <div class="section-title">
+            <div class="section-title post-section-title">
               <strong id="roomTitle">게시글</strong>
-              <span>최신순</span>
+              <div class="post-type-tabs" id="postTypeTabs" aria-label="게시글 종류 선택">
+                <button class="active" type="button" data-post-type-filter="전체">전체</button>
+                <button type="button" data-post-type-filter="공지">공지</button>
+                <button type="button" data-post-type-filter="수업">수업</button>
+                <button type="button" data-post-type-filter="자료">자료</button>
+              </div>
             </div>
             <div id="postList"></div>
           </section>

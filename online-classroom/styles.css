@@ -324,6 +324,36 @@ a:focus-visible {
   margin-bottom: 12px;
 }
 
+.post-section-title {
+  align-items: flex-start;
+}
+
+.post-type-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.post-type-tabs button {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.post-type-tabs button.active {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+
 #roomList,
 #postList {
   display: grid;
@@ -447,6 +477,14 @@ a:focus-visible {
   .room-header {
     align-items: flex-start;
     flex-wrap: wrap;
+  }
+
+  .post-section-title {
+    display: grid;
+  }
+
+  .post-type-tabs {
+    justify-content: flex-start;
   }
 
   .password-panel {

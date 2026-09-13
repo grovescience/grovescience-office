@@ -5,6 +5,7 @@ let currentStudentName = "";
 let currentStudentCode = "";
 let currentStudentData = null;
 let currentRoomId = "";
+let currentPostTypeFilter = "전체";
 const classroomImageApi = "https://grovescience-office-admin.vercel.app/api/classroom-images";
 const passwordEventApi = "https://grovescience-office-admin.vercel.app/api/student-password-events";
 
@@ -96,6 +97,12 @@ async function setup() {
   });
   $("#passwordChangeCancelBtn").addEventListener("click", closePasswordChange);
   $("#passwordChangeForm").addEventListener("submit", changePassword);
+  $("#postTypeTabs").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-post-type-filter]");
+    if (!button) return;
+    currentPostTypeFilter = button.dataset.postTypeFilter || "전체";
+    renderPosts();
+  });
   ["#studentNameInput", "#studentCodeInput"].forEach((selector) => {
     $(selector).addEventListener("keydown", (event) => {
       if (event.key === "Enter") login();
@@ -317,11 +324,36 @@ function normalizeStudentPostType(type = "") {
   return ["공지", "자료"].includes(text) ? text : "공지";
 }
 
+function renderPostTypeTabs(posts = []) {
+  const counts = posts.reduce(
+    (acc, post) => {
+      const type = normalizeStudentPostType(post.type);
+      acc["전체"] += 1;
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    },
+    { "전체": 0, "공지": 0, "수업": 0, "자료": 0 },
+  );
+  document.querySelectorAll("[data-post-type-filter]").forEach((button) => {
+    const type = button.dataset.postTypeFilter || "전체";
+    button.classList.toggle("active", type === currentPostTypeFilter);
+    button.setAttribute("aria-pressed", String(type === currentPostTypeFilter));
+    button.textContent = `${type} ${counts[type] || 0}`;
+  });
+}
+
 function renderPosts() {
   const room = getAllowedRooms().find((item) => item.id === currentRoomId);
+  const posts = [...(room?.posts || [])].sort(comparePostsByLessonDate);
+  const visiblePosts = currentPostTypeFilter === "전체"
+    ? posts
+    : posts.filter((post) => normalizeStudentPostType(post.type) === currentPostTypeFilter);
   $("#roomTitle").textContent = room ? displayOrchardOnText(room.name) : "게시글";
-  $("#postList").innerHTML = room?.posts?.length
-    ? [...room.posts].sort(comparePostsByLessonDate).map(renderPost).join("")
+  renderPostTypeTabs(posts);
+  $("#postList").innerHTML = posts.length
+    ? visiblePosts.length
+      ? visiblePosts.map(renderPost).join("")
+      : `<div class="empty">${currentPostTypeFilter} 탭에 표시할 게시글이 없습니다.</div>`
     : `<div class="empty">확인할 게시글이 없습니다.</div>`;
   hydratePostImages();
 }
