@@ -1,15 +1,15 @@
 :root {
-  --bg: #f7f6f1;
-  --surface: #ffffff;
-  --surface-soft: #eef4e7;
-  --ink: #22352b;
-  --muted: #68746b;
-  --line: #dce2d7;
-  --green: #2c5f3f;
-  --green-light: #78a641;
-  --orange: #f0a232;
+  --bg: #f7f3e9;
+  --surface: #fffdf8;
+  --surface-soft: #f6e9bd;
+  --ink: #233229;
+  --muted: #6f746d;
+  --line: #ded5c7;
+  --green: #205b39;
+  --green-light: #9a742f;
+  --orange: #c88a2d;
   --red: #b84c3d;
-  --shadow: 0 18px 50px rgba(42, 67, 52, 0.12);
+  --shadow: 0 16px 44px rgba(48, 52, 45, 0.1);
 }
 
 body.auth-pending .app-shell,
@@ -22,10 +22,7 @@ body.auth-locked .app-shell {
   display: grid;
   place-items: center;
   padding: 24px;
-  background:
-    radial-gradient(circle at 15% 20%, rgba(236, 154, 52, .16), transparent 35%),
-    radial-gradient(circle at 85% 80%, rgba(47, 112, 85, .16), transparent 38%),
-    #f6f4ed;
+  background: var(--bg);
 }
 
 body.authenticated .office-auth,
@@ -38,8 +35,8 @@ body.local-office .office-auth {
   padding: 38px;
   border: 1px solid var(--line);
   border-radius: 22px;
-  background: rgba(255, 255, 255, .96);
-  box-shadow: 0 22px 65px rgba(52, 66, 55, .14);
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .office-auth-card > img {
@@ -96,7 +93,7 @@ button {
   flex-direction: column;
   gap: 28px;
   padding: 28px 20px;
-  background: #fbfaf6;
+  background: var(--surface);
   border-right: 1px solid var(--line);
   overflow-y: auto;
 }
@@ -121,8 +118,8 @@ button {
 
 .brand-home-button:hover,
 .brand-home-button:focus-visible {
-  background: #f3f7f0;
-  outline: 2px solid rgba(47, 112, 85, .18);
+  background: var(--surface-soft);
+  outline: 2px solid rgba(32, 91, 57, .18);
   outline-offset: 5px;
 }
 
@@ -131,7 +128,7 @@ button {
   height: 58px;
   border-radius: 8px;
   object-fit: contain;
-  background: #f8f5ee;
+  background: #fbf5e7;
 }
 
 .brand strong,
@@ -208,7 +205,7 @@ button {
 
 .nav-group summary:hover,
 .nav-group.has-active summary {
-  background: #eef4e9;
+  background: var(--surface-soft);
   color: var(--green);
 }
 
@@ -232,13 +229,13 @@ button {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #aab5a6;
+  background: #b8ae9e;
   transform: translateY(-50%);
 }
 
 .nav-submenu .nav-item:hover,
 .nav-submenu .nav-item.active {
-  background: #eef4e9;
+  background: var(--surface-soft);
   color: var(--green);
   font-weight: 800;
 }
@@ -495,8 +492,8 @@ h2 {
 
 .stat-card:hover,
 .class-card:hover {
-  border-color: #b8cfab;
-  background: #f8fbf4;
+  border-color: #d2bd7d;
+  background: #fff9e9;
 }
 
 .stat-card span,
@@ -691,7 +688,7 @@ td {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbfcf8;
+  background: #fffaf1;
 }
 
 .class-card strong {
@@ -1021,9 +1018,9 @@ td {
 .helper-line {
   margin-bottom: 16px;
   padding: 14px 16px;
-  border: 1px solid #d8e6c7;
+  border: 1px solid #e4d29d;
   border-radius: 8px;
-  background: #f3f8ec;
+  background: #fbf2d7;
 }
 
 .notice strong,
@@ -1049,7 +1046,7 @@ td {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbfcf8;
+  background: #fffaf1;
 }
 
 .book-card-head {
@@ -1324,7 +1321,7 @@ td {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbfcf8;
+  background: #fffaf1;
 }
 
 .wait-card-info {
@@ -1489,7 +1486,7 @@ td {
 }
 
 .classroom-post-summary[open] > summary {
-  background: #f4f8f1;
+  background: #fbf3df;
   color: var(--green);
 }
 
@@ -1540,7 +1537,7 @@ td {
   padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #f4f8f1;
+  background: #fbf3df;
   color: var(--muted);
 }
 
@@ -1566,9 +1563,9 @@ td {
   gap: 16px;
   margin-bottom: 16px;
   padding: 14px 16px;
-  border: 1px solid #cfe0c7;
+  border: 1px solid #e2cf99;
   border-radius: 9px;
-  background: #f5faef;
+  background: #fff6dd;
 }
 
 .credential-quick-bar strong,
@@ -1626,7 +1623,7 @@ td {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: #fbfcf8;
+  background: #fffaf1;
 }
 
 .field-help {
@@ -1669,7 +1666,7 @@ td {
   object-fit: cover;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #eef4ea;
+  background: #f8f0dc;
 }
 
 .classroom-image-placeholder {
@@ -1779,7 +1776,7 @@ td {
   padding: 9px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: #fbfcf8;
+  background: #fffaf1;
 }
 
 .member-main {
@@ -1838,9 +1835,9 @@ td {
 .code-copy-button {
   min-height: 32px;
   padding: 0 10px;
-  border: 1px solid #cdddc5;
+  border: 1px solid #dfcc94;
   border-radius: 7px;
-  background: #f3f8ec;
+  background: var(--surface-soft);
   color: var(--green);
   font-size: 13px;
   font-weight: 800;
@@ -1902,7 +1899,7 @@ td {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbfcf8;
+  background: #fffaf1;
 }
 
 .classroom-card {
@@ -1938,7 +1935,7 @@ td {
   margin-top: 9px;
   padding: 7px 9px;
   border-radius: 6px;
-  background: #f2f5ee;
+  background: #f8f2e4;
   color: var(--ink);
 }
 
@@ -1949,8 +1946,8 @@ td {
 
 .classroom-card.selected {
   border-color: var(--green);
-  box-shadow: 0 0 0 2px rgba(47, 112, 85, .12);
-  background: #f5f9f2;
+  box-shadow: 0 0 0 2px rgba(32, 91, 57, .12);
+  background: var(--surface-soft);
 }
 
 .classroom-card p,
@@ -2065,7 +2062,7 @@ td {
 
 .student-classroom-list button.active {
   border-color: var(--green);
-  background: #f3f8ec;
+  background: var(--surface-soft);
 }
 
 .student-classroom-list span {
@@ -2081,7 +2078,7 @@ td {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbfcf8;
+  background: #fffaf1;
 }
 
 .payment-row {
@@ -2092,7 +2089,7 @@ td {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbfcf8;
+  background: #fffaf1;
 }
 
 .payment-row.paid {
