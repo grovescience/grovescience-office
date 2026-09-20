@@ -8,6 +8,7 @@ let currentRoomId = "";
 let currentPostTypeFilter = "전체";
 const classroomImageApi = "https://grovescience-office-admin.vercel.app/api/classroom-images";
 const passwordEventApi = "https://grovescience-office-admin.vercel.app/api/student-password-events";
+const loginEventApi = "https://grovescience-office-admin.vercel.app/api/student-login-events";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -167,6 +168,21 @@ async function loadPortal(session) {
   currentStudentCode = "";
   currentRoomId = "";
   renderStudentRoom();
+  recordStudentLogin(session);
+}
+
+async function recordStudentLogin(session) {
+  const accessToken = session?.access_token || "";
+  if (!accessToken) return;
+  try {
+    await fetch(loginEventApi, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: "{}",
+    });
+  } catch (error) {
+    // 접속 기록 저장 실패가 학생의 학습방 이용을 막지는 않습니다.
+  }
 }
 
 async function logout() {
@@ -299,14 +315,21 @@ function renderStudentScores() {
         const academyDetail = item.type === "academy"
           ? `<span>${Number(item.correctCount) || 0}/${Number(item.totalQuestions) || 0}개 정답 · 100점 환산</span>`
           : `<span>학교 시험</span>`;
+        const classResults = Array.isArray(item.classResults) ? item.classResults : [];
+        const classResultList = classResults.length
+          ? `<div class="student-score-class-results"><strong>반 전체 결과</strong>${classResults.map((result) => `<p class="${result.studentId === currentStudentData?.student?.id ? "is-me" : ""}"><b>${Number(result.rank) || ""}위</b><span>${escapeHtml(result.studentName || "학생")}</span><em>${Number(result.score) || 0}점</em></p>`).join("")}</div>`
+          : "";
         return `
           <article class="student-score-card">
-            <div>
-              <small>${escapeHtml(item.date)} · ${escapeHtml(item.subject || "과학")}${item.className ? ` · ${escapeHtml(item.className)}` : ""}</small>
-              <strong>${escapeHtml(item.title || "시험")}</strong>
-              ${academyDetail}
+            <div class="student-score-main">
+              <div>
+                <small>${escapeHtml(item.date)} · ${escapeHtml(item.subject || "과학")}${item.className ? ` · ${escapeHtml(item.className)}` : ""}</small>
+                <strong>${escapeHtml(item.title || "시험")}</strong>
+                ${academyDetail}
+              </div>
+              <em>${Number(item.score) || 0}점</em>
             </div>
-            <em>${Number(item.score) || 0}점</em>
+            ${classResultList}
           </article>`;
       }).join("")
     : `<div class="empty">아직 등록된 성적이 없습니다.</div>`;

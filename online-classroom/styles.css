@@ -129,19 +129,25 @@ select {
 }
 
 .student-score-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+  display: grid;
+  gap: 12px;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fbfcf8;
 }
 
-.student-score-card > div {
+.student-score-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.student-score-main > div {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .student-score-card small,
@@ -150,11 +156,51 @@ select {
   font-size: 12px;
 }
 
-.student-score-card em {
+.student-score-main em {
   flex: 0 0 auto;
   color: var(--green);
   font-size: 24px;
   font-style: normal;
+  font-weight: 900;
+}
+
+.student-score-class-results {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.student-score-class-results > strong {
+  font-size: 13px;
+}
+
+.student-score-class-results p {
+  display: grid;
+  grid-template-columns: 42px 1fr 58px;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  padding: 7px 8px;
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.student-score-class-results p.is-me {
+  background: #e9f5ee;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.student-score-class-results b,
+.student-score-class-results em {
+  color: var(--green);
+  font-style: normal;
+}
+
+.student-score-class-results em {
+  text-align: right;
   font-weight: 900;
 }
 

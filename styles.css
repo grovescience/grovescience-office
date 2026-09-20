@@ -390,6 +390,10 @@ h2 {
 
 .score-exam-form { display: grid; grid-template-columns: repeat(3, minmax(160px, 1fr)); gap: 12px; }
 .score-exam-form label { display: grid; gap: 7px; color: var(--muted); font-weight: 700; }
+.score-exam-form .score-share-field { align-items: stretch; min-height: auto; }
+.score-share-field > span { display: flex; align-items: center; gap: 9px; color: var(--text); }
+.score-share-field strong { display: block; color: var(--text); font-size: 14px; }
+.score-share-field small { display: block; margin-top: 3px; color: var(--muted); font-weight: 600; line-height: 1.35; }
 .score-student-inputs { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 9px; margin-top: 18px; }
 .score-student-row { display: grid; grid-template-columns: minmax(70px, .7fr) minmax(100px, 1fr) 110px 120px; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
 .score-student-row span, .score-student-row em { color: var(--muted); font-size: 13px; font-style: normal; }
@@ -403,6 +407,8 @@ h2 {
 .score-card-heading small { color: var(--muted); }
 .score-card-heading h3 { margin: 5px 0 12px; }
 .score-card-heading > strong { color: var(--green); white-space: nowrap; }
+.score-share-badge { display: inline-flex; width: fit-content; padding: 4px 8px; border-radius: 99px; background: #f1f3f0; color: var(--muted); font-size: 12px; font-weight: 800; }
+.score-share-badge.is-shared { background: #e9f5ee; color: var(--green); }
 .score-mini-chart { display: grid; gap: 7px; }
 .score-mini-chart > div { display: grid; grid-template-columns: 68px 1fr 52px; align-items: center; gap: 8px; font-size: 12px; }
 .score-mini-chart i { height: 9px; border-radius: 99px; overflow: hidden; background: #edf1ea; }
@@ -580,6 +586,47 @@ h2 {
 .toolbar input,
 .toolbar select {
   padding: 0 12px;
+}
+
+.login-analytics-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+
+.login-analytics-toolbar input {
+  min-width: 220px;
+  padding: 0 12px;
+}
+
+.login-analytics-stats {
+  margin-bottom: 18px;
+}
+
+.login-recent-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 22px 0 10px;
+}
+
+.login-recent-heading h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.login-recent-heading span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.muted-inline {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .search-box {

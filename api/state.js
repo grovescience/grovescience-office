@@ -7,15 +7,37 @@ function isRoomOpenForStudent(room, studentId, now = new Date()) {
   return (!access.startDate || access.startDate <= today) && (!access.endDate || access.endDate >= today);
 }
 
+function scorePercent(exam, result) {
+  if (exam.type === "academy") {
+    const total = Number(exam.totalQuestions) || 0;
+    return total ? Math.round((Number(result.correctCount) / total) * 1000) / 10 : 0;
+  }
+  return Math.max(0, Math.min(100, Number(result.score) || 0));
+}
+
+function buildScoreClassResults(state, exam) {
+  const studentById = new Map((state.students || []).map((student) => [student.id, student]));
+  return [...(exam.results || [])]
+    .map((result) => {
+      const student = studentById.get(result.studentId);
+      return {
+        studentId: result.studentId,
+        studentName: student?.name || "학생",
+        score: scorePercent(exam, result),
+        correctCount: exam.type === "academy" ? Number(result.correctCount) || 0 : null,
+        totalQuestions: exam.type === "academy" ? Number(exam.totalQuestions) || 0 : null,
+      };
+    })
+    .sort((a, b) => b.score - a.score || String(a.studentName).localeCompare(String(b.studentName), "ko"))
+    .map((result, index) => ({ ...result, rank: index + 1 }));
+}
+
 function buildStudentScores(state, studentId) {
   return (state.scoreExams || [])
     .map((exam) => {
       const result = (exam.results || []).find((item) => item.studentId === studentId);
       if (!result) return null;
       const totalQuestions = exam.type === "academy" ? Number(exam.totalQuestions) || 0 : null;
-      const score = exam.type === "academy"
-        ? (totalQuestions ? Math.round((Number(result.correctCount) / totalQuestions) * 1000) / 10 : 0)
-        : Math.max(0, Math.min(100, Number(result.score) || 0));
       return {
         id: exam.id,
         type: exam.type,
@@ -23,9 +45,11 @@ function buildStudentScores(state, studentId) {
         date: exam.date || "",
         subject: exam.subject || "과학",
         className: exam.className || "",
-        score,
+        score: scorePercent(exam, result),
         correctCount: exam.type === "academy" ? Number(result.correctCount) || 0 : null,
         totalQuestions,
+        shareClassResults: Boolean(exam.shareClassResults),
+        classResults: exam.shareClassResults ? buildScoreClassResults(state, exam) : [],
       };
     })
     .filter(Boolean)
@@ -138,6 +162,39 @@ function protectStoredSchedules(incomingState = {}, storedState = {}) {
   return { ...incomingState, scheduleEvents: merged.events, scheduleEventTombstones: merged.tombstones, scheduleEventHistory: nextHistory };
 }
 
+function normalizeStoredLoginEvents(events = []) {
+  const seen = new Set();
+  return (Array.isArray(events) ? events : [])
+    .map((event) => ({
+      id: String(event.id || ""),
+      studentId: String(event.studentId || ""),
+      loginId: String(event.loginId || "").trim().toLowerCase(),
+      studentName: String(event.studentName || ""),
+      grade: String(event.grade || ""),
+      className: String(event.className || ""),
+      at: String(event.at || ""),
+    }))
+    .filter((event) => {
+      const key = event.id || `${event.studentId}|${event.at}`;
+      if (!event.studentId || !event.at || seen.has(key) || Number.isNaN(Date.parse(event.at))) return false;
+      seen.add(key);
+      event.id = event.id || key;
+      return true;
+    })
+    .sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
+    .slice(0, 5000);
+}
+
+function protectStoredLoginEvents(incomingState = {}, storedState = {}) {
+  return {
+    ...incomingState,
+    studentLoginEvents: normalizeStoredLoginEvents([
+      ...(storedState.studentLoginEvents || []),
+      ...(incomingState.studentLoginEvents || []),
+    ]),
+  };
+}
+
 async function persistStateWithoutCredentialLoss(incomingState) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const storedResult = await adminRest("office_state?id=eq.main&select=payload,updated_at");
@@ -145,7 +202,7 @@ async function persistStateWithoutCredentialLoss(incomingState) {
     const storedRows = await storedResult.json();
     const storedRow = storedRows[0];
     const storedState = storedRow?.payload || {};
-    const state = protectStoredSchedules(protectStoredStudentCredentials(incomingState, storedState), storedState);
+    const state = protectStoredLoginEvents(protectStoredSchedules(protectStoredStudentCredentials(incomingState, storedState), storedState), storedState);
     const updatedAt = new Date().toISOString();
 
     if (!storedRow) {

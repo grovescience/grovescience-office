@@ -37,6 +37,8 @@ let selectedPaymentFilter = "미납자";
 let selectedStudentList = "active";
 let selectedActiveStudentGroup = "all";
 let selectedStudentSort = "oldest";
+let selectedLoginAnalyticsClass = "전체";
+let loginAnalyticsSearch = "";
 let serverSaveTimer = null;
 let syncingFromServer = false;
 let serverSyncInProgress = false;
@@ -87,6 +89,7 @@ function createInitialState() {
     scheduleEventTombstones: {},
     scheduleEventHistory: [],
     scoreExams: [],
+    studentLoginEvents: [],
   };
 }
 
@@ -110,11 +113,13 @@ function normalizeState(saved) {
     scheduleEventTombstones: {},
     scheduleEventHistory: [],
     scoreExams: [],
+    studentLoginEvents: [],
     ...saved,
   };
   next.customClasses = normalizeCustomClasses(next.customClasses);
   next.studentCycleAnchors = next.studentCycleAnchors && typeof next.studentCycleAnchors === "object" ? next.studentCycleAnchors : {};
   next.scoreExams = Array.isArray(next.scoreExams) ? next.scoreExams : [];
+  next.studentLoginEvents = normalizeStudentLoginEvents(next.studentLoginEvents);
   next.announcements = normalizeAnnouncements(next.announcements);
   next.payments = normalizePayments(next.payments);
   next.classSettings = normalizeClassSettings(next.classSettings, next.customClasses);
@@ -217,6 +222,29 @@ function normalizeState(saved) {
     updatedAt: event.updatedAt || event.createdAt || Date.now(),
   })).filter((event) => Number(next.scheduleEventTombstones[event.id] || 0) < Number(event.updatedAt || event.createdAt || 0));
   return next;
+}
+
+function normalizeStudentLoginEvents(events = []) {
+  const seen = new Set();
+  return (Array.isArray(events) ? events : [])
+    .map((event) => ({
+      id: String(event.id || ""),
+      studentId: String(event.studentId || ""),
+      loginId: String(event.loginId || "").trim().toLowerCase(),
+      studentName: String(event.studentName || ""),
+      grade: String(event.grade || ""),
+      className: String(event.className || ""),
+      at: String(event.at || ""),
+    }))
+    .filter((event) => {
+      const key = event.id || `${event.studentId}|${event.at}`;
+      if (!event.studentId || !event.at || Number.isNaN(Date.parse(event.at)) || seen.has(key)) return false;
+      seen.add(key);
+      event.id = event.id || key;
+      return true;
+    })
+    .sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
+    .slice(0, 5000);
 }
 
 function normalizeClassrooms(classrooms = []) {
@@ -537,6 +565,15 @@ function studentCredentialShape(students = []) {
   })));
 }
 
+function studentLoginEventShape(events = []) {
+  return JSON.stringify(normalizeStudentLoginEvents(events).map((event) => ({
+    id: event.id,
+    studentId: event.studentId,
+    loginId: event.loginId,
+    at: event.at,
+  })));
+}
+
 function resolveStudentCredentials(serverStudent = {}, localStudent = {}) {
   const serverUpdatedAt = Number(serverStudent.credentialUpdatedAt || 0);
   const localUpdatedAt = Number(localStudent.credentialUpdatedAt || 0);
@@ -625,6 +662,8 @@ async function syncStateFromServer() {
     const serverScheduleShape = JSON.stringify({ events: serverState.scheduleEvents || [], tombstones: serverState.scheduleEventTombstones || {} });
     const localStudentCycleShape = JSON.stringify(state.studentCycleAnchors || {});
     const serverStudentCycleShape = JSON.stringify(serverState.studentCycleAnchors || {});
+    const localLoginEventShape = studentLoginEventShape(state.studentLoginEvents || []);
+    const serverLoginEventShape = studentLoginEventShape(serverState.studentLoginEvents || []);
     const mergedStudentCycles = mergeStudentCycleAnchors(serverState.studentCycleAnchors, state.studentCycleAnchors);
     state.studentCycleAnchors = mergedStudentCycles;
     serverState.studentCycleAnchors = mergedStudentCycles;
@@ -637,6 +676,11 @@ async function syncStateFromServer() {
     serverState.scheduleEventTombstones = mergedSchedules.tombstones;
     const localSchedulesRecovered = localScheduleShape !== JSON.stringify({ events: mergedSchedules.events, tombstones: mergedSchedules.tombstones });
     const serverSchedulesRecovered = serverScheduleShape !== JSON.stringify({ events: mergedSchedules.events, tombstones: mergedSchedules.tombstones });
+    const mergedLoginEvents = normalizeStudentLoginEvents([...(serverState.studentLoginEvents || []), ...(state.studentLoginEvents || [])]);
+    state.studentLoginEvents = mergedLoginEvents;
+    serverState.studentLoginEvents = mergedLoginEvents;
+    const localLoginsRecovered = localLoginEventShape !== studentLoginEventShape(mergedLoginEvents);
+    const serverLoginsRecovered = serverLoginEventShape !== studentLoginEventShape(mergedLoginEvents);
 
     if (
       serverCount > localCount ||
@@ -673,7 +717,11 @@ async function syncStateFromServer() {
       saveState({ localOnly: true });
       renderScheduleCalendar();
     }
-    if (retiredClassMigrationNeeded || serverCredentialsRecovered || serverSchedulesRecovered || localStudentCyclesRecovered || serverStudentCyclesRecovered) queueServerSave();
+    if (localLoginsRecovered) {
+      saveState({ localOnly: true });
+      renderLoginAnalytics();
+    }
+    if (retiredClassMigrationNeeded || serverCredentialsRecovered || serverSchedulesRecovered || localStudentCyclesRecovered || serverStudentCyclesRecovered || serverLoginsRecovered) queueServerSave();
   } catch (error) {
     // 서버 저장을 사용할 수 없는 환경에서는 기존 브라우저 저장을 사용합니다.
   } finally {
@@ -1242,6 +1290,14 @@ function bindEvents() {
   $("#studentRoomLogoutBtn").addEventListener("click", logoutStudentRoom);
   $("#classRoomPreviewBtn").addEventListener("click", renderClassRoomPreview);
   $("#classRoomPreviewSelect").addEventListener("change", () => { currentClassPreviewRoomId = ""; renderClassRoomPreview(); });
+  $("#loginAnalyticsClassFilter").addEventListener("change", () => {
+    selectedLoginAnalyticsClass = $("#loginAnalyticsClassFilter").value || "전체";
+    renderLoginAnalytics();
+  });
+  $("#loginAnalyticsSearch").addEventListener("input", () => {
+    loginAnalyticsSearch = $("#loginAnalyticsSearch").value.trim().toLowerCase();
+    renderLoginAnalytics();
+  });
   $("#announcementScopeInput").addEventListener("change", syncAnnouncementScopeFields);
   $("#saveAnnouncementBtn").addEventListener("click", saveAnnouncementFromForm);
   $("#clearAnnouncementBtn").addEventListener("click", clearAnnouncementForm);
@@ -1331,6 +1387,7 @@ function renderAll() {
   renderClassroomStudentOptions();
   renderClassrooms();
   renderStudentClassroomView();
+  renderLoginAnalytics();
   renderScoreExams();
 }
 
@@ -1449,6 +1506,23 @@ function scorePercent(exam, result) {
   return Math.max(0, Math.min(100, Number(result.score) || 0));
 }
 
+function buildScoreClassResults(exam, students = state.students || []) {
+  const studentById = new Map((students || []).map((student) => [student.id, student]));
+  return [...(exam.results || [])]
+    .map((result) => {
+      const student = studentById.get(result.studentId);
+      return {
+        studentId: result.studentId,
+        studentName: student?.name || "학생",
+        score: scorePercent(exam, result),
+        correctCount: exam.type === "academy" ? Number(result.correctCount) || 0 : null,
+        totalQuestions: exam.type === "academy" ? Number(exam.totalQuestions) || 0 : null,
+      };
+    })
+    .sort((a, b) => b.score - a.score || String(a.studentName).localeCompare(String(b.studentName), "ko"))
+    .map((result, index) => ({ ...result, rank: index + 1 }));
+}
+
 function syncScoreExamForm() {
   const academy = $("#scoreExamType").value === "academy";
   $("#scoreTotalQuestionsWrap").hidden = !academy;
@@ -1490,6 +1564,7 @@ function clearScoreExamForm() {
   $("#scoreExamTitle").value = "";
   $("#scoreExamSubject").value = "과학";
   $("#scoreExamTotalQuestions").value = "";
+  if ($("#scoreShareClassResultsInput")) $("#scoreShareClassResultsInput").checked = false;
   syncScoreExamForm();
   renderScoreStudentInputs();
 }
@@ -1510,7 +1585,19 @@ function saveScoreExam() {
   if (type === "academy" && results.some((item) => item.correctCount < 0 || item.correctCount > totalQuestions || !Number.isInteger(item.correctCount))) return alert(`맞힌 개수는 0개부터 ${totalQuestions}개까지 정수로 입력해주세요.`);
   const id = $("#scoreExamId").value || crypto.randomUUID();
   const old = (state.scoreExams || []).find((exam) => exam.id === id);
-  const exam = { id, type, title, date: $("#scoreExamDate").value || today(), className, subject: $("#scoreExamSubject").value.trim(), totalQuestions: type === "academy" ? totalQuestions : null, results, createdAt: old?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const exam = {
+    id,
+    type,
+    title,
+    date: $("#scoreExamDate").value || today(),
+    className,
+    subject: $("#scoreExamSubject").value.trim(),
+    totalQuestions: type === "academy" ? totalQuestions : null,
+    shareClassResults: Boolean($("#scoreShareClassResultsInput")?.checked),
+    results,
+    createdAt: old?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
   state.scoreExams = [...(state.scoreExams || []).filter((item) => item.id !== id), exam];
   saveState();
   renderScoreExams();
@@ -1526,7 +1613,8 @@ function renderScoreExamCard(exam) {
   const sorted = [...(exam.results || [])].sort((a, b) => scorePercent(exam, b) - scorePercent(exam, a));
   const average = sorted.length ? Math.round(sorted.reduce((sum, result) => sum + scorePercent(exam, result), 0) / sorted.length * 10) / 10 : 0;
   const bars = exam.type === "school" ? `<div class="score-mini-chart">${sorted.slice(0, 8).map((result) => { const percent = scorePercent(exam, result); return `<div><span>${scoreEscape(scoreResultName(result))}</span><i><b style="width:${percent}%"></b></i><strong>${percent}점</strong></div>`; }).join("")}</div>` : `<div class="score-academy-summary">${sorted.slice(0, 5).map((result) => `<span>${scoreEscape(scoreResultName(result))} ${result.correctCount}/${exam.totalQuestions} · ${scorePercent(exam, result)}점</span>`).join("")}</div>`;
-  return `<article class="score-exam-card" onclick="openScoreRanking('${exam.id}')"><div class="score-card-heading"><div><small>${scoreEscape(exam.date)} · ${scoreEscape(exam.className)}${exam.subject ? ` · ${scoreEscape(exam.subject)}` : ""}</small><h3>${scoreEscape(exam.title)}</h3></div><strong>평균 ${average}점</strong></div>${bars}<div class="score-card-actions"><button type="button" onclick="event.stopPropagation(); editScoreExam('${exam.id}')">수정</button><button type="button" class="danger-text" onclick="event.stopPropagation(); deleteScoreExam('${exam.id}')">삭제</button><span>눌러서 전체 순위 보기</span></div></article>`;
+  const shareLabel = exam.shareClassResults ? "학생에게 반 전체 공개" : "학생은 자기 성적만";
+  return `<article class="score-exam-card" onclick="openScoreRanking('${exam.id}')"><div class="score-card-heading"><div><small>${scoreEscape(exam.date)} · ${scoreEscape(exam.className)}${exam.subject ? ` · ${scoreEscape(exam.subject)}` : ""}</small><h3>${scoreEscape(exam.title)}</h3><span class="score-share-badge ${exam.shareClassResults ? "is-shared" : ""}">${shareLabel}</span></div><strong>평균 ${average}점</strong></div>${bars}<div class="score-card-actions"><button type="button" onclick="event.stopPropagation(); editScoreExam('${exam.id}')">수정</button><button type="button" class="danger-text" onclick="event.stopPropagation(); deleteScoreExam('${exam.id}')">삭제</button><span>눌러서 전체 순위 보기</span></div></article>`;
 }
 
 function renderScoreExams() {
@@ -1549,6 +1637,7 @@ function editScoreExam(id) {
   $("#scoreExamClass").value = exam.className;
   $("#scoreExamSubject").value = exam.subject || "과학";
   $("#scoreExamTotalQuestions").value = exam.totalQuestions || "";
+  if ($("#scoreShareClassResultsInput")) $("#scoreShareClassResultsInput").checked = Boolean(exam.shareClassResults);
   syncScoreExamForm();
   renderScoreStudentInputs(exam.results || []);
   $("#scores").scrollIntoView({ behavior: "smooth" });
@@ -1662,6 +1751,119 @@ function renderDashboard() {
         )
         .join("")
     : `<tr><td colspan="4">아직 등록된 학생이 없습니다.</td></tr>`;
+}
+
+function loginEventTime(event) {
+  const time = Date.parse(event?.at || "");
+  return Number.isFinite(time) ? time : 0;
+}
+
+function getStartOfLoginWeek(date = new Date()) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const mondayOffset = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - mondayOffset);
+  return start;
+}
+
+function getStartOfLoginMonth(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function getLoginAnalyticsRows() {
+  const now = new Date();
+  const weekStart = getStartOfLoginWeek(now).getTime();
+  const monthStart = getStartOfLoginMonth(now).getTime();
+  const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
+  const grouped = new Map();
+
+  normalizeStudentLoginEvents(state.studentLoginEvents || []).forEach((event) => {
+    const student = studentsById.get(event.studentId);
+    const row = grouped.get(event.studentId) || {
+      student,
+      studentId: event.studentId,
+      name: student?.name || event.studentName || "학생",
+      grade: student?.grade || event.grade || "",
+      className: student?.className || event.className || "",
+      classNames: student ? getStudentClassNames(student) : [event.className].filter(Boolean),
+      loginId: student?.loginId || event.loginId || "",
+      weekCount: 0,
+      monthCount: 0,
+      totalCount: 0,
+      latestAt: "",
+      latestTime: 0,
+    };
+    const time = loginEventTime(event);
+    row.totalCount += 1;
+    if (time >= weekStart) row.weekCount += 1;
+    if (time >= monthStart) row.monthCount += 1;
+    if (time > row.latestTime) {
+      row.latestTime = time;
+      row.latestAt = event.at;
+    }
+    grouped.set(event.studentId, row);
+  });
+
+  return Array.from(grouped.values())
+    .filter((row) => {
+      const classMatch = selectedLoginAnalyticsClass === "전체" || row.classNames.includes(selectedLoginAnalyticsClass);
+      const searchText = `${row.name} ${row.loginId} ${row.grade} ${row.classNames.join(" ")}`.toLowerCase();
+      return classMatch && (!loginAnalyticsSearch || searchText.includes(loginAnalyticsSearch));
+    })
+    .sort((left, right) => right.latestTime - left.latestTime || String(left.name).localeCompare(String(right.name), "ko", { numeric: true }));
+}
+
+function renderLoginAnalytics() {
+  const classFilter = $("#loginAnalyticsClassFilter");
+  if (!classFilter) return;
+  const previousClass = classFilter.value || selectedLoginAnalyticsClass;
+  classFilter.innerHTML = classOptions(true, true);
+  classFilter.value = Array.from(classFilter.options).some((option) => option.value === previousClass) ? previousClass : "전체";
+  selectedLoginAnalyticsClass = classFilter.value || "전체";
+  if ($("#loginAnalyticsSearch").value !== loginAnalyticsSearch) $("#loginAnalyticsSearch").value = loginAnalyticsSearch;
+
+  state.studentLoginEvents = normalizeStudentLoginEvents(state.studentLoginEvents || []);
+  const rows = getLoginAnalyticsRows();
+  const now = new Date();
+  const weekStart = getStartOfLoginWeek(now).getTime();
+  const monthStart = getStartOfLoginMonth(now).getTime();
+  const filteredStudentIds = new Set(rows.map((row) => row.studentId));
+  const filteredEvents = state.studentLoginEvents.filter((event) => filteredStudentIds.has(event.studentId));
+  const weekCount = filteredEvents.filter((event) => loginEventTime(event) >= weekStart).length;
+  const monthCount = filteredEvents.filter((event) => loginEventTime(event) >= monthStart).length;
+  const latest = filteredEvents[0];
+
+  $("#loginWeekCount").textContent = weekCount;
+  $("#loginMonthCount").textContent = monthCount;
+  $("#loginStudentCount").textContent = rows.length;
+  $("#loginLatestTime").textContent = latest ? formatDateTime(latest.at) : "-";
+  $("#loginAnalyticsTable").innerHTML = rows.length
+    ? rows.map((row) => `
+        <tr>
+          <td>${scoreEscape(row.name)}${row.grade ? ` <span class="muted-inline">${scoreEscape(row.grade)}</span>` : ""}</td>
+          <td>${scoreEscape(row.classNames.join(", ") || "-")}</td>
+          <td>${scoreEscape(row.loginId || "-")}</td>
+          <td>${row.weekCount}</td>
+          <td>${row.monthCount}</td>
+          <td>${row.totalCount}</td>
+          <td>${row.latestAt ? scoreEscape(formatDateTime(row.latestAt)) : "-"}</td>
+        </tr>
+      `).join("")
+    : `<tr><td colspan="7">아직 접속 기록이 없습니다. 학생이 과수원ON에 들어오면 자동으로 기록됩니다.</td></tr>`;
+  $("#loginRecentEventsTable").innerHTML = filteredEvents.length
+    ? filteredEvents.slice(0, 30).map((event) => {
+        const student = state.students.find((item) => item.id === event.studentId);
+        const classNames = student ? getStudentClassNames(student) : [event.className].filter(Boolean);
+        return `
+          <tr>
+            <td>${scoreEscape(formatDateTime(event.at))}</td>
+            <td>${scoreEscape(student?.name || event.studentName || "학생")}</td>
+            <td>${scoreEscape(classNames.join(", ") || "-")}</td>
+            <td>${scoreEscape(student?.loginId || event.loginId || "-")}</td>
+          </tr>
+        `;
+      }).join("")
+    : `<tr><td colspan="4">최근 접속 내역이 없습니다.</td></tr>`;
 }
 
 function getClassWeekdays(item) {
@@ -2395,6 +2597,7 @@ function refreshClassControls() {
     waitClass: $("#waitClass")?.value,
     waitNextClass: $("#waitNextClass")?.value,
     announcementClassInput: $("#announcementClassInput")?.value,
+    loginAnalyticsClassFilter: $("#loginAnalyticsClassFilter")?.value,
     classEditSelect: $("#classEditSelect")?.value,
   };
 
@@ -2406,6 +2609,7 @@ function refreshClassControls() {
   $("#waitClass").innerHTML = classOptions();
   $("#waitNextClass").innerHTML = classOptions();
   $("#announcementClassInput").innerHTML = classOptions();
+  if ($("#loginAnalyticsClassFilter")) $("#loginAnalyticsClassFilter").innerHTML = classOptions(true, true);
   $("#classEditSelect").innerHTML = classEditOptions();
 
   Object.entries(previous).forEach(([id, value]) => {
@@ -4967,6 +5171,7 @@ function buildOnlineStudentFiles(sourceState = state) {
           const result = (exam.results || []).find((item) => item.studentId === student.id);
           if (!result) return null;
           const totalQuestions = exam.type === "academy" ? Number(exam.totalQuestions) || 0 : null;
+          const classResults = exam.shareClassResults ? buildScoreClassResults(exam, sourceState.students || []) : [];
           return {
             id: exam.id,
             type: exam.type,
@@ -4979,6 +5184,8 @@ function buildOnlineStudentFiles(sourceState = state) {
               : Math.max(0, Math.min(100, Number(result.score) || 0)),
             correctCount: exam.type === "academy" ? Number(result.correctCount) || 0 : null,
             totalQuestions,
+            shareClassResults: Boolean(exam.shareClassResults),
+            classResults,
           };
         })
         .filter(Boolean)
