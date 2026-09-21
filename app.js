@@ -61,6 +61,31 @@ let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1
 let selectedScheduleDate = today();
 let editingScheduleEventId = "";
 
+const officialKoreanHolidays2026 = [
+  { date: "2026-01-01", name: "신정" },
+  { date: "2026-02-16", name: "설날 연휴" },
+  { date: "2026-02-17", name: "설날" },
+  { date: "2026-02-18", name: "설날 연휴" },
+  { date: "2026-03-01", name: "3·1절" },
+  { date: "2026-03-02", name: "대체공휴일(3·1절)" },
+  { date: "2026-05-05", name: "어린이날" },
+  { date: "2026-05-24", name: "부처님오신날" },
+  { date: "2026-05-25", name: "대체공휴일(부처님오신날)" },
+  { date: "2026-06-03", name: "지방선거일" },
+  { date: "2026-06-06", name: "현충일" },
+  { date: "2026-08-15", name: "광복절" },
+  { date: "2026-08-17", name: "대체공휴일(광복절)" },
+  { date: "2026-09-24", name: "추석 연휴" },
+  { date: "2026-09-25", name: "추석" },
+  { date: "2026-09-26", name: "추석 연휴" },
+  { date: "2026-10-03", name: "개천절" },
+  { date: "2026-10-05", name: "대체공휴일(개천절)" },
+  { date: "2026-10-09", name: "한글날" },
+  { date: "2026-12-25", name: "성탄절" },
+];
+const koreanPublicHolidayCache = new Map([[2026, officialKoreanHolidays2026]]);
+const koreanPublicHolidayRequests = new Map();
+
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
@@ -1898,7 +1923,7 @@ function extractScheduleTime(value) {
 }
 
 function scheduleSortValue(item) {
-  const priority = item.type === "학원 방학" ? "0" : "1";
+  const priority = item.kind === "holiday" ? "0" : item.type === "학원 방학" ? "1" : "2";
   return `${priority}|${item.time || "99:99"}`;
 }
 
@@ -2015,7 +2040,36 @@ function scheduleItemsForDate(dateValue) {
       title: `${item.title} 보강`,
       memo: `${shortScheduleDate(item.date)} ${scheduleTimeRange(item.time, item.endTime) || "시간 미정"} 수업 → ${shortScheduleDate(item.moveToDate)} ${scheduleTimeRange(item.moveToTime, item.moveToEndTime) || "시간 미정"}`,
     });
-  return [...classItems, ...directEvents, ...movedEvents].sort((a, b) => scheduleSortValue(a).localeCompare(scheduleSortValue(b), "ko") || a.title.localeCompare(b.title, "ko"));
+  const holidayItems = (koreanPublicHolidayCache.get(Number(dateValue.slice(0, 4))) || [])
+    .filter((holiday) => holiday.date === dateValue)
+    .map((holiday) => ({
+      id: `holiday-${holiday.date}-${holiday.name}`,
+      kind: "holiday",
+      type: "공휴일",
+      title: holiday.name,
+      date: holiday.date,
+      time: "",
+      memo: "대한민국 공휴일 · 자동 표시",
+    }));
+  return [...holidayItems, ...classItems, ...directEvents, ...movedEvents].sort((a, b) => scheduleSortValue(a).localeCompare(scheduleSortValue(b), "ko") || a.title.localeCompare(b.title, "ko"));
+}
+
+async function ensureKoreanPublicHolidays(year) {
+  if (koreanPublicHolidayCache.has(year) || koreanPublicHolidayRequests.has(year)) return;
+  const request = fetch(`./api/holidays?year=${year}`)
+    .then(async (response) => {
+      if (!response.ok) throw new Error("공휴일 정보를 불러오지 못했습니다.");
+      const result = await response.json();
+      koreanPublicHolidayCache.set(year, Array.isArray(result.holidays) ? result.holidays : []);
+    })
+    .catch(() => {
+      koreanPublicHolidayCache.set(year, []);
+    })
+    .finally(() => {
+      koreanPublicHolidayRequests.delete(year);
+      if (calendarCursor.getFullYear() === year) renderScheduleCalendar();
+    });
+  koreanPublicHolidayRequests.set(year, request);
 }
 
 function scheduleMoveText(item) {
@@ -2119,6 +2173,7 @@ function scheduleRepeatMark(item) {
 }
 
 function scheduleCalendarClass(item) {
+  if (item.kind === "holiday") return "calendar-holiday";
   if (item.kind === "class") return "calendar-class";
   if (item.kind === "makeup") return "calendar-makeup";
   if (item.type === "개인 일정") return "calendar-personal";
@@ -2130,14 +2185,17 @@ function scheduleCalendarClass(item) {
 
 function renderScheduleCalendar() {
   const year = calendarCursor.getFullYear(), month = calendarCursor.getMonth();
+  void ensureKoreanPublicHolidays(year);
   $("#calendarMonthLabel").textContent = `${year}년 ${month + 1}월`;
   const first = new Date(year, month, 1), lastDate = new Date(year, month + 1, 0).getDate();
-  const cells = ["일", "월", "화", "수", "목", "금", "토"].map((day) => `<div class="calendar-weekday">${day}</div>`);
+  const cells = ["일", "월", "화", "수", "목", "금", "토"].map((day, index) => `<div class="calendar-weekday ${index === 0 ? "sunday" : index === 6 ? "saturday" : ""}">${day}</div>`);
   for (let i = 0; i < first.getDay(); i += 1) cells.push(`<div class="calendar-day outside"></div>`);
   for (let day = 1; day <= lastDate; day += 1) {
     const date = new Date(year, month, day), key = dateKey(date);
     const items = scheduleItemsForDate(key);
-    cells.push(`<button class="calendar-day ${key === today() ? "today" : ""} ${key === selectedScheduleDate ? "selected" : ""}" type="button" onclick="selectScheduleDate('${key}')"><span>${day}</span>${items.slice(0, 5).map((item) => `<small class="${scheduleCalendarClass(item)}">${scheduleTimeRange(item.time, item.endTime) ? `${scheduleTimeRange(item.time, item.endTime)} ` : ""}${item.title}${item.kind === "event" ? scheduleAcademicTargetMark(item) : ""}${item.round ? ` ${item.round}회차` : ""}${item.kind === "event" ? `${scheduleRepeatMark(item)}${scheduleMoveText(item)}` : ""}</small>`).join("")}${items.length > 5 ? `<small class="calendar-more">+${items.length - 5}개 더보기</small>` : ""}</button>`);
+    const weekdayClass = date.getDay() === 0 ? "sunday" : date.getDay() === 6 ? "saturday" : "";
+    const publicHolidayClass = items.some((item) => item.kind === "holiday") ? "public-holiday" : "";
+    cells.push(`<button class="calendar-day ${weekdayClass} ${publicHolidayClass} ${key === today() ? "today" : ""} ${key === selectedScheduleDate ? "selected" : ""}" type="button" onclick="selectScheduleDate('${key}')"><span>${day}</span>${items.slice(0, 5).map((item) => `<small class="${scheduleCalendarClass(item)}">${scheduleTimeRange(item.time, item.endTime) ? `${scheduleTimeRange(item.time, item.endTime)} ` : ""}${item.title}${item.kind === "event" ? scheduleAcademicTargetMark(item) : ""}${item.round ? ` ${item.round}회차` : ""}${item.kind === "event" ? `${scheduleRepeatMark(item)}${scheduleMoveText(item)}` : ""}</small>`).join("")}${items.length > 5 ? `<small class="calendar-more">+${items.length - 5}개 더보기</small>` : ""}</button>`);
   }
   $("#academyCalendar").innerHTML = cells.join("");
   renderScheduleRecoveryOptions();
@@ -2364,6 +2422,7 @@ function scheduleEventActionButtons(item) {
 }
 
 function scheduleAgendaBadgeClass(item) {
+  if (item.kind === "holiday") return "holiday";
   if (item.type === "개인 일정") return "coral";
   if (item.type === "학원 방학") return "blue";
   if (isAcademicScheduleType(item.type)) return "purple";
@@ -2374,7 +2433,7 @@ function scheduleAgendaBadgeClass(item) {
 
 function renderScheduleAgenda() {
   const items = scheduleItemsForDate(selectedScheduleDate);
-  $("#scheduleAgenda").innerHTML = `<h3>${selectedScheduleDate} 일정 · 시간순</h3>` + (items.map((item) => `<article class="schedule-agenda-${item.kind} ${item.type === "개인 일정" ? "schedule-agenda-personal" : item.type === "학원 방학" ? "schedule-agenda-vacation" : isAcademicScheduleType(item.type) ? "schedule-agenda-academic" : ""}"><span class="badge ${scheduleAgendaBadgeClass(item)}">${item.type}${scheduleRepeatMark(item)}</span><time>${scheduleTimeRange(item.time, item.endTime) || (isAcademicScheduleType(item.type) ? "종일" : "시간 미정")}</time><strong>${item.title}${item.kind === "event" ? scheduleAcademicTargetMark(item) : ""}${item.round ? ` · ${item.round}회차` : ""}${item.kind === "event" ? scheduleMoveText(item) : ""}</strong><small>${item.kind === "event" ? scheduleDatePeriodText(item) : ""}${item.memo || ""}</small>${scheduleEventActionButtons(item)}</article>`).join("") || `<div class="empty-state">등록된 일정이 없습니다.</div>`);
+  $("#scheduleAgenda").innerHTML = `<h3>${selectedScheduleDate} 일정 · 시간순</h3>` + (items.map((item) => `<article class="schedule-agenda-${item.kind} ${item.type === "개인 일정" ? "schedule-agenda-personal" : item.type === "학원 방학" ? "schedule-agenda-vacation" : isAcademicScheduleType(item.type) ? "schedule-agenda-academic" : ""}"><span class="badge ${scheduleAgendaBadgeClass(item)}">${item.type}${scheduleRepeatMark(item)}</span><time>${scheduleTimeRange(item.time, item.endTime) || (item.kind === "holiday" || isAcademicScheduleType(item.type) ? "종일" : "시간 미정")}</time><strong>${item.title}${item.kind === "event" ? scheduleAcademicTargetMark(item) : ""}${item.round ? ` · ${item.round}회차` : ""}${item.kind === "event" ? scheduleMoveText(item) : ""}</strong><small>${item.kind === "event" ? scheduleDatePeriodText(item) : ""}${item.memo || ""}</small>${scheduleEventActionButtons(item)}</article>`).join("") || `<div class="empty-state">등록된 일정이 없습니다.</div>`);
 }
 
 function openDashboardStudents() {
