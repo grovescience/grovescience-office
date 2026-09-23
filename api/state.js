@@ -15,13 +15,23 @@ function scorePercent(exam, result) {
   return Math.max(0, Math.min(100, Number(result.score) || 0));
 }
 
+function scoreAttempts(exam, result) {
+  if (Array.isArray(result.attempts) && result.attempts.length) return result.attempts;
+  return [{ round: 1, date: exam.date || "", score: result.score, correctCount: result.correctCount }];
+}
+
+function latestScoreAttempt(exam, result) {
+  return [...scoreAttempts(exam, result)].sort((a, b) => Number(b.round) - Number(a.round))[0];
+}
+
 function buildScoreClassResults(state, exam) {
   const studentById = new Map((state.students || []).map((student) => [student.id, student]));
   return [...(exam.results || [])]
-    .map((result) => {
-      const student = studentById.get(result.studentId);
+    .map((storedResult) => {
+      const result = latestScoreAttempt(exam, storedResult);
+      const student = studentById.get(storedResult.studentId);
       return {
-        studentId: result.studentId,
+        studentId: storedResult.studentId,
         studentName: student?.name || "학생",
         score: scorePercent(exam, result),
         correctCount: exam.type === "academy" ? Number(result.correctCount) || 0 : null,
@@ -38,22 +48,27 @@ function buildStudentScores(state, studentId) {
       const result = (exam.results || []).find((item) => item.studentId === studentId);
       if (!result) return null;
       const totalQuestions = exam.type === "academy" ? Number(exam.totalQuestions) || 0 : null;
+      const attempts = [...scoreAttempts(exam, result)]
+        .sort((a, b) => Number(a.round) - Number(b.round))
+        .map((attempt) => ({ round: Number(attempt.round) || 1, date: attempt.date || exam.date || "", score: scorePercent(exam, attempt), correctCount: exam.type === "academy" ? Number(attempt.correctCount) || 0 : null }));
       return {
         id: exam.id,
         type: exam.type,
+        category: exam.category || "other",
         title: exam.title || "시험",
         date: exam.date || "",
         subject: exam.subject || "과학",
         className: exam.className || "",
-        score: scorePercent(exam, result),
-        correctCount: exam.type === "academy" ? Number(result.correctCount) || 0 : null,
+        score: attempts.at(-1).score,
+        correctCount: attempts.at(-1).correctCount,
         totalQuestions,
-        shareClassResults: Boolean(exam.shareClassResults),
-        classResults: exam.shareClassResults ? buildScoreClassResults(state, exam) : [],
+        attempts,
+        shareClassResults: exam.type === "academy" && Boolean(exam.shareClassResults),
+        classResults: exam.type === "academy" && exam.shareClassResults ? buildScoreClassResults(state, exam) : [],
       };
     })
     .filter(Boolean)
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    .sort((a, b) => String(b.attempts.at(-1)?.date || b.date).localeCompare(String(a.attempts.at(-1)?.date || a.date)));
 }
 
 function getStudentClassNames(student) {

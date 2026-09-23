@@ -1191,6 +1191,7 @@ function setup() {
   $("#scoreExamDate").value = today();
   $("#scoreExamSubject").value = "과학";
   $("#scoreExamClass").innerHTML = classOptions();
+  syncScoreExamForm();
   refreshCredentialClassFilters();
   $("#classFilter").innerHTML = classOptions(true);
   $("#attendanceClass").innerHTML = classOptions();
@@ -1334,6 +1335,13 @@ function bindEvents() {
   $$('[data-credential-class-filter]').forEach((select) => select.addEventListener("change", () => syncCredentialClassFilters(select.value)));
   $("#importStudentCredentialsInput").addEventListener("change", importStudentCredentials);
   $("#scoreExamType").addEventListener("change", () => { syncScoreExamForm(); renderScoreStudentInputs(); });
+  $("#scoreExamRound").addEventListener("change", () => {
+    const exam = (state.scoreExams || []).find((item) => item.id === $("#scoreExamId").value);
+    const round = Number($("#scoreExamRound").value);
+    const attempt = exam?.results?.flatMap((result) => scoreAttempts(exam, result)).find((item) => Number(item.round) === round);
+    $("#scoreExamDate").value = attempt?.date || today();
+    renderScoreStudentInputs(exam?.results || []);
+  });
   $("#scoreExamClass").addEventListener("change", () => renderScoreStudentInputs());
   $("#scoreExamTotalQuestions").addEventListener("input", updateAcademyScorePreviews);
   $("#saveScoreExamBtn").addEventListener("click", saveScoreExam);
@@ -1531,13 +1539,27 @@ function scorePercent(exam, result) {
   return Math.max(0, Math.min(100, Number(result.score) || 0));
 }
 
+function scoreAttempts(exam, result) {
+  if (Array.isArray(result.attempts) && result.attempts.length) return result.attempts;
+  return [{ round: 1, date: exam.date || "", score: result.score, correctCount: result.correctCount }];
+}
+
+function latestScoreAttempt(exam, result) {
+  return [...scoreAttempts(exam, result)].sort((a, b) => Number(b.round) - Number(a.round))[0];
+}
+
+function scoreCategoryLabel(exam) {
+  return { midterm: "중간고사", final: "기말고사", unit: "단원평가", quiz: "쪽지시험", other: "기타 시험" }[exam.category] || (exam.type === "school" ? "학교 시험" : "학원 시험");
+}
+
 function buildScoreClassResults(exam, students = state.students || []) {
   const studentById = new Map((students || []).map((student) => [student.id, student]));
   return [...(exam.results || [])]
-    .map((result) => {
-      const student = studentById.get(result.studentId);
+    .map((storedResult) => {
+      const result = latestScoreAttempt(exam, storedResult);
+      const student = studentById.get(storedResult.studentId);
       return {
-        studentId: result.studentId,
+        studentId: storedResult.studentId,
         studentName: student?.name || "학생",
         score: scorePercent(exam, result),
         correctCount: exam.type === "academy" ? Number(result.correctCount) || 0 : null,
@@ -1551,6 +1573,19 @@ function buildScoreClassResults(exam, students = state.students || []) {
 function syncScoreExamForm() {
   const academy = $("#scoreExamType").value === "academy";
   $("#scoreTotalQuestionsWrap").hidden = !academy;
+  $("#scoreShareClassResultsWrap").hidden = !academy;
+  if (!academy) $("#scoreShareClassResultsInput").checked = false;
+  const category = $("#scoreExamCategory");
+  const previous = category.value;
+  const options = academy ? [["unit", "단원평가"], ["quiz", "쪽지시험"], ["other", "기타 학원 시험"]] : [["midterm", "중간고사"], ["final", "기말고사"], ["other", "기타 학교 시험"]];
+  category.innerHTML = options.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
+  if (options.some(([value]) => value === previous)) category.value = previous;
+}
+
+function syncScoreExamRounds(exam = null, selectedRound = 1) {
+  const maxRound = exam ? Math.max(1, ...(exam.results || []).flatMap((result) => scoreAttempts(exam, result).map((attempt) => Number(attempt.round) || 1))) : 1;
+  $("#scoreExamRound").innerHTML = Array.from({ length: maxRound + (exam ? 1 : 0) }, (_, index) => `<option value="${index + 1}">${index + 1}차${exam && index + 1 === maxRound + 1 ? " (새 재시험)" : ""}</option>`).join("");
+  $("#scoreExamRound").value = String(selectedRound);
 }
 
 function renderScoreStudentInputs(existingResults = null) {
@@ -1564,7 +1599,8 @@ function renderScoreStudentInputs(existingResults = null) {
     return;
   }
   container.innerHTML = students.map((student) => {
-    const result = stored.find((item) => item.studentId === student.id) || {};
+    const storedResult = stored.find((item) => item.studentId === student.id);
+    const result = storedResult ? scoreAttempts({ date: $("#scoreExamDate").value }, storedResult).find((attempt) => Number(attempt.round) === Number($("#scoreExamRound").value)) || {} : {};
     const value = type === "academy" ? (result.correctCount ?? "") : (result.score ?? "");
     return `<label class="score-student-row"><strong>${scoreEscape(student.name)}</strong><span>${scoreEscape(student.grade || "")} · ${scoreEscape(student.school || "")}</span><input class="score-value-input" data-student-id="${scoreEscape(student.id)}" type="number" min="0" step="${type === "academy" ? "1" : "0.1"}" value="${scoreEscape(value)}" placeholder="${type === "academy" ? "맞힌 개수" : "점수"}"><em class="score-converted"></em></label>`;
   }).join("");
@@ -1585,40 +1621,57 @@ function updateAcademyScorePreviews() {
 function clearScoreExamForm() {
   $("#scoreExamId").value = "";
   $("#scoreExamType").value = "school";
+  $("#scoreExamType").disabled = false;
+  syncScoreExamForm();
+  $("#scoreExamCategory").value = "midterm";
+  syncScoreExamRounds();
   $("#scoreExamDate").value = today();
   $("#scoreExamTitle").value = "";
   $("#scoreExamSubject").value = "과학";
   $("#scoreExamTotalQuestions").value = "";
   if ($("#scoreShareClassResultsInput")) $("#scoreShareClassResultsInput").checked = false;
-  syncScoreExamForm();
   renderScoreStudentInputs();
 }
 
 function saveScoreExam() {
   const type = $("#scoreExamType").value;
+  const category = $("#scoreExamCategory").value;
+  const round = Number($("#scoreExamRound").value);
   const title = $("#scoreExamTitle").value.trim();
   const className = $("#scoreExamClass").value;
   const totalQuestions = Number($("#scoreExamTotalQuestions").value);
   if (!title || !className) return alert("시험명과 반을 입력해주세요.");
   if (type === "academy" && (!Number.isInteger(totalQuestions) || totalQuestions < 1)) return alert("학원내 시험의 전체 문항 수를 입력해주세요.");
-  const results = Array.from($("#scoreStudentInputs").querySelectorAll(".score-value-input")).filter((input) => input.value !== "").map((input) => {
+  const enteredResults = Array.from($("#scoreStudentInputs").querySelectorAll(".score-value-input")).filter((input) => input.value !== "").map((input) => {
     const value = Number(input.value);
     return type === "academy" ? { studentId: input.dataset.studentId, correctCount: value } : { studentId: input.dataset.studentId, score: value };
   });
-  if (!results.length) return alert("학생 한 명 이상의 성적을 입력해주세요.");
-  if (type === "school" && results.some((item) => item.score < 0 || item.score > 100)) return alert("학교 시험 점수는 0점부터 100점까지 입력해주세요.");
-  if (type === "academy" && results.some((item) => item.correctCount < 0 || item.correctCount > totalQuestions || !Number.isInteger(item.correctCount))) return alert(`맞힌 개수는 0개부터 ${totalQuestions}개까지 정수로 입력해주세요.`);
+  if (!enteredResults.length) return alert("학생 한 명 이상의 성적을 입력해주세요.");
+  if (type === "school" && enteredResults.some((item) => item.score < 0 || item.score > 100)) return alert("학교 시험 점수는 0점부터 100점까지 입력해주세요.");
+  if (type === "academy" && enteredResults.some((item) => item.correctCount < 0 || item.correctCount > totalQuestions || !Number.isInteger(item.correctCount))) return alert(`맞힌 개수는 0개부터 ${totalQuestions}개까지 정수로 입력해주세요.`);
   const id = $("#scoreExamId").value || crypto.randomUUID();
   const old = (state.scoreExams || []).find((exam) => exam.id === id);
+  const enteredById = new Map(enteredResults.map((result) => [result.studentId, result]));
+  const studentIds = new Set([...(old?.results || []).map((result) => result.studentId), ...enteredById.keys()]);
+  const results = [...studentIds].map((studentId) => {
+    const oldResult = old?.results?.find((result) => result.studentId === studentId);
+    const previous = oldResult ? scoreAttempts(old, oldResult).filter((attempt) => Number(attempt.round) !== round) : [];
+    const entered = enteredById.get(studentId);
+    const attempts = entered ? [...previous, { ...entered, round, date: $("#scoreExamDate").value || today() }] : previous;
+    if (!attempts.length) return null;
+    attempts.sort((a, b) => Number(a.round) - Number(b.round));
+    return { studentId, attempts, score: attempts.at(-1).score, correctCount: attempts.at(-1).correctCount };
+  }).filter(Boolean);
   const exam = {
     id,
     type,
+    category,
     title,
-    date: $("#scoreExamDate").value || today(),
+    date: round === 1 ? $("#scoreExamDate").value || today() : old?.date || today(),
     className,
     subject: $("#scoreExamSubject").value.trim(),
     totalQuestions: type === "academy" ? totalQuestions : null,
-    shareClassResults: Boolean($("#scoreShareClassResultsInput")?.checked),
+    shareClassResults: type === "academy" && Boolean($("#scoreShareClassResultsInput")?.checked),
     results,
     createdAt: old?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -1627,7 +1680,7 @@ function saveScoreExam() {
   saveState();
   renderScoreExams();
   clearScoreExamForm();
-  alert("시험 성적을 저장했습니다.");
+  alert(`${round}차 시험 성적을 저장했습니다.`);
 }
 
 function scoreResultName(result) {
@@ -1635,16 +1688,18 @@ function scoreResultName(result) {
 }
 
 function renderScoreExamCard(exam) {
-  const sorted = [...(exam.results || [])].sort((a, b) => scorePercent(exam, b) - scorePercent(exam, a));
-  const average = sorted.length ? Math.round(sorted.reduce((sum, result) => sum + scorePercent(exam, result), 0) / sorted.length * 10) / 10 : 0;
-  const bars = exam.type === "school" ? `<div class="score-mini-chart">${sorted.slice(0, 8).map((result) => { const percent = scorePercent(exam, result); return `<div><span>${scoreEscape(scoreResultName(result))}</span><i><b style="width:${percent}%"></b></i><strong>${percent}점</strong></div>`; }).join("")}</div>` : `<div class="score-academy-summary">${sorted.slice(0, 5).map((result) => `<span>${scoreEscape(scoreResultName(result))} ${result.correctCount}/${exam.totalQuestions} · ${scorePercent(exam, result)}점</span>`).join("")}</div>`;
-  const shareLabel = exam.shareClassResults ? "학생에게 반 전체 공개" : "학생은 자기 성적만";
-  return `<article class="score-exam-card" onclick="openScoreRanking('${exam.id}')"><div class="score-card-heading"><div><small>${scoreEscape(exam.date)} · ${scoreEscape(exam.className)}${exam.subject ? ` · ${scoreEscape(exam.subject)}` : ""}</small><h3>${scoreEscape(exam.title)}</h3><span class="score-share-badge ${exam.shareClassResults ? "is-shared" : ""}">${shareLabel}</span></div><strong>평균 ${average}점</strong></div>${bars}<div class="score-card-actions"><button type="button" onclick="event.stopPropagation(); editScoreExam('${exam.id}')">수정</button><button type="button" class="danger-text" onclick="event.stopPropagation(); deleteScoreExam('${exam.id}')">삭제</button><span>눌러서 전체 순위 보기</span></div></article>`;
+  const sorted = [...(exam.results || [])].sort((a, b) => scorePercent(exam, latestScoreAttempt(exam, b)) - scorePercent(exam, latestScoreAttempt(exam, a)));
+  const average = sorted.length ? Math.round(sorted.reduce((sum, result) => sum + scorePercent(exam, latestScoreAttempt(exam, result)), 0) / sorted.length * 10) / 10 : 0;
+  const bars = exam.type === "school" ? `<div class="score-mini-chart">${sorted.slice(0, 8).map((stored) => { const percent = scorePercent(exam, latestScoreAttempt(exam, stored)); return `<div><span>${scoreEscape(scoreResultName(stored))}</span><i><b style="width:${percent}%"></b></i><strong>${percent}점</strong></div>`; }).join("")}</div>` : `<div class="score-academy-summary">${sorted.slice(0, 5).map((stored) => { const result = latestScoreAttempt(exam, stored); return `<span>${scoreEscape(scoreResultName(stored))} ${result.correctCount}/${exam.totalQuestions} · ${scorePercent(exam, result)}점</span>`; }).join("")}</div>`;
+  const maxRound = Math.max(1, ...sorted.flatMap((result) => scoreAttempts(exam, result).map((attempt) => Number(attempt.round) || 1)));
+  const shareLabel = exam.type === "academy" && exam.shareClassResults ? "학생에게 반 전체 공개" : "학생은 자기 성적만";
+  return `<article class="score-exam-card" onclick="openScoreRanking('${exam.id}')"><div class="score-card-heading"><div><small>${scoreEscape(exam.date)} · ${scoreEscape(exam.className)} · ${scoreEscape(scoreCategoryLabel(exam))}${exam.subject ? ` · ${scoreEscape(exam.subject)}` : ""}</small><h3>${scoreEscape(exam.title)}</h3><span class="score-share-badge ${exam.type === "academy" && exam.shareClassResults ? "is-shared" : ""}">${shareLabel}</span><span class="score-share-badge">${maxRound}차까지 입력</span></div><strong>최근 성적 평균 ${average}점</strong></div>${bars}<div class="score-card-actions"><button type="button" onclick="event.stopPropagation(); editScoreExam('${exam.id}')">수정</button><button type="button" onclick="event.stopPropagation(); editScoreExam('${exam.id}', ${maxRound + 1})">재시험 입력</button><button type="button" class="danger-text" onclick="event.stopPropagation(); deleteScoreExam('${exam.id}')">삭제</button><span>눌러서 최근 순위 보기</span></div></article>`;
 }
 
 function renderScoreExams() {
   if (!$("#schoolExamList")) return;
-  const exams = [...(state.scoreExams || [])].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  const latestDate = (exam) => Math.max(0, ...((exam.results || []).flatMap((result) => scoreAttempts(exam, result).map((attempt) => Date.parse(attempt.date || "") || 0))));
+  const exams = [...(state.scoreExams || [])].sort((a, b) => latestDate(b) - latestDate(a) || String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
   ["school", "academy"].forEach((type) => {
     const target = type === "school" ? $("#schoolExamList") : $("#academyExamList");
     const items = exams.filter((exam) => exam.type === type);
@@ -1652,18 +1707,22 @@ function renderScoreExams() {
   });
 }
 
-function editScoreExam(id) {
+function editScoreExam(id, round = 1) {
   const exam = (state.scoreExams || []).find((item) => item.id === id);
   if (!exam) return;
   $("#scoreExamId").value = exam.id;
   $("#scoreExamType").value = exam.type;
-  $("#scoreExamDate").value = exam.date;
+  $("#scoreExamType").disabled = true;
+  syncScoreExamForm();
+  $("#scoreExamCategory").value = exam.category || "other";
+  syncScoreExamRounds(exam, round);
+  const attempt = exam.results?.flatMap((result) => scoreAttempts(exam, result)).find((item) => Number(item.round) === round);
+  $("#scoreExamDate").value = attempt?.date || today();
   $("#scoreExamTitle").value = exam.title;
   $("#scoreExamClass").value = exam.className;
   $("#scoreExamSubject").value = exam.subject || "과학";
   $("#scoreExamTotalQuestions").value = exam.totalQuestions || "";
-  if ($("#scoreShareClassResultsInput")) $("#scoreShareClassResultsInput").checked = Boolean(exam.shareClassResults);
-  syncScoreExamForm();
+  if ($("#scoreShareClassResultsInput")) $("#scoreShareClassResultsInput").checked = exam.type === "academy" && Boolean(exam.shareClassResults);
   renderScoreStudentInputs(exam.results || []);
   $("#scores").scrollIntoView({ behavior: "smooth" });
 }
@@ -1679,10 +1738,10 @@ function deleteScoreExam(id) {
 function openScoreRanking(id) {
   const exam = (state.scoreExams || []).find((item) => item.id === id);
   if (!exam) return;
-  const sorted = [...(exam.results || [])].sort((a, b) => scorePercent(exam, b) - scorePercent(exam, a));
+  const sorted = [...(exam.results || [])].sort((a, b) => scorePercent(exam, latestScoreAttempt(exam, b)) - scorePercent(exam, latestScoreAttempt(exam, a)));
   $("#scoreRankingTitle").textContent = exam.title;
-  $("#scoreRankingSummary").textContent = `${exam.date} · ${exam.className}${exam.subject ? ` · ${exam.subject}` : ""} · 고득점순`;
-  $("#scoreRankingList").innerHTML = `<div class="score-ranking-list">${sorted.map((result, index) => `<div><b>${index + 1}</b><strong>${scoreEscape(scoreResultName(result))}</strong><span>${exam.type === "academy" ? `${result.correctCount}/${exam.totalQuestions}개 정답` : "학교 시험"}</span><em>${scorePercent(exam, result)}점</em></div>`).join("")}</div>`;
+  $("#scoreRankingSummary").textContent = `${exam.date} · ${exam.className} · ${scoreCategoryLabel(exam)} · 최근 성적순`;
+  $("#scoreRankingList").innerHTML = `<div class="score-ranking-list">${sorted.map((stored, index) => { const result = latestScoreAttempt(exam, stored); return `<div><b>${index + 1}</b><strong>${scoreEscape(scoreResultName(stored))}</strong><span>${exam.type === "academy" ? `${result.correctCount}/${exam.totalQuestions}개 정답` : scoreCategoryLabel(exam)}</span><em>${scorePercent(exam, result)}점</em></div>`; }).join("")}</div>`;
   $("#scoreRankingDialog").showModal();
 }
 
@@ -5230,25 +5289,28 @@ function buildOnlineStudentFiles(sourceState = state) {
           const result = (exam.results || []).find((item) => item.studentId === student.id);
           if (!result) return null;
           const totalQuestions = exam.type === "academy" ? Number(exam.totalQuestions) || 0 : null;
-          const classResults = exam.shareClassResults ? buildScoreClassResults(exam, sourceState.students || []) : [];
+          const attempts = [...scoreAttempts(exam, result)]
+            .sort((a, b) => Number(a.round) - Number(b.round))
+            .map((attempt) => ({ round: Number(attempt.round) || 1, date: attempt.date || exam.date || "", score: scorePercent(exam, attempt), correctCount: exam.type === "academy" ? Number(attempt.correctCount) || 0 : null }));
+          const classResults = exam.type === "academy" && exam.shareClassResults ? buildScoreClassResults(exam, sourceState.students || []) : [];
           return {
             id: exam.id,
             type: exam.type,
+            category: exam.category || "other",
             title: exam.title || "시험",
             date: exam.date || "",
             subject: exam.subject || "과학",
             className: exam.className || "",
-            score: exam.type === "academy"
-              ? (totalQuestions ? Math.round((Number(result.correctCount) / totalQuestions) * 1000) / 10 : 0)
-              : Math.max(0, Math.min(100, Number(result.score) || 0)),
-            correctCount: exam.type === "academy" ? Number(result.correctCount) || 0 : null,
+            score: attempts.at(-1).score,
+            correctCount: attempts.at(-1).correctCount,
             totalQuestions,
-            shareClassResults: Boolean(exam.shareClassResults),
+            attempts,
+            shareClassResults: exam.type === "academy" && Boolean(exam.shareClassResults),
             classResults,
           };
         })
         .filter(Boolean)
-        .sort((a, b) => String(b.date).localeCompare(String(a.date))),
+        .sort((a, b) => String(b.attempts.at(-1)?.date || b.date).localeCompare(String(a.attempts.at(-1)?.date || a.date))),
       exportedAt: new Date().toISOString(),
     };
     return files;

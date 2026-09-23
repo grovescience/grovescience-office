@@ -387,6 +387,7 @@ h2 {
 
 .score-exam-form { display: grid; grid-template-columns: repeat(3, minmax(160px, 1fr)); gap: 12px; }
 .score-exam-form label { display: grid; gap: 7px; color: var(--muted); font-weight: 700; }
+.score-exam-form [hidden] { display: none; }
 .score-exam-form .score-share-field { align-items: stretch; min-height: auto; }
 .score-share-field > span { display: flex; align-items: center; gap: 9px; color: var(--text); }
 .score-share-field strong { display: block; color: var(--text); font-size: 14px; }

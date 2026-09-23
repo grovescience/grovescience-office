@@ -307,30 +307,60 @@ function renderStudentAnnouncements() {
     : `<div class="empty">현재 확인할 공지사항이 없습니다.</div>`;
 }
 
+function studentScoreCategory(item) {
+  return { midterm: "중간고사", final: "기말고사", unit: "단원평가", quiz: "쪽지시험" }[item.category] || "기타 시험";
+}
+
+function studentScoreAttempts(item) {
+  const attempts = Array.isArray(item.attempts) && item.attempts.length
+    ? item.attempts : [{ round: 1, date: item.date, score: item.score, correctCount: item.correctCount }];
+  return [...attempts].sort((a, b) => Number(a.round) - Number(b.round));
+}
+
+function renderScoreProgress(item) {
+  const attempts = studentScoreAttempts(item);
+  if (attempts.length < 2) return "";
+  const maxRound = Math.max(2, ...attempts.map((attempt) => Number(attempt.round) || 1));
+  const points = attempts.map((attempt) => ({
+    x: 24 + ((Number(attempt.round) || 1) - 1) / (maxRound - 1) * 272,
+    y: 112 - Math.max(0, Math.min(100, Number(attempt.score) || 0)),
+  }));
+  return `<div class="student-score-progress" aria-label="${escapeHtml(item.title || "시험")} 재시험 점수 변화">
+    <svg viewBox="0 0 320 136" preserveAspectRatio="none" role="img" aria-label="${attempts.map((attempt) => `${Number(attempt.round) || 1}차 ${Number(attempt.score) || 0}점`).join(", ")}">
+      <line x1="24" y1="12" x2="296" y2="12" class="score-grid-line" />
+      <line x1="24" y1="62" x2="296" y2="62" class="score-grid-line" />
+      <line x1="24" y1="112" x2="296" y2="112" class="score-grid-line" />
+      <polyline points="${points.map((point) => `${point.x},${point.y}`).join(" ")}" class="score-progress-line" />
+      ${points.map((point) => `<circle cx="${point.x}" cy="${point.y}" r="5" class="score-progress-dot" />`).join("")}
+    </svg>
+    <div class="student-score-attempts">${attempts.map((attempt) => `<div><strong>${Number(attempt.round) || 1}차</strong><b>${Number(attempt.score) || 0}점</b><small>${escapeHtml(attempt.date || "")}${item.type === "academy" && attempt.correctCount != null ? ` · ${Number(attempt.correctCount) || 0}/${Number(item.totalQuestions) || 0}개` : ""}</small></div>`).join("")}</div>
+  </div>`;
+}
+
 function renderStudentScores() {
   const scores = Array.isArray(currentStudentData?.scores) ? currentStudentData.scores : [];
   $("#scoreCountLabel").textContent = `${scores.length}개`;
   $("#studentScoreList").innerHTML = scores.length
-    ? scores.map((item) => {
-        const academyDetail = item.type === "academy"
-          ? `<span>${Number(item.correctCount) || 0}/${Number(item.totalQuestions) || 0}개 정답 · 100점 환산</span>`
-          : `<span>학교 시험</span>`;
-        const classResults = Array.isArray(item.classResults) ? item.classResults : [];
-        const classResultList = classResults.length
-          ? `<div class="student-score-class-results"><strong>반 전체 결과</strong>${classResults.map((result) => `<p class="${result.studentId === currentStudentData?.student?.id ? "is-me" : ""}"><b>${Number(result.rank) || ""}위</b><span>${escapeHtml(result.studentName || "학생")}</span><em>${Number(result.score) || 0}점</em></p>`).join("")}</div>`
-          : "";
-        return `
-          <article class="student-score-card">
-            <div class="student-score-main">
-              <div>
-                <small>${escapeHtml(item.date)} · ${escapeHtml(item.subject || "과학")}${item.className ? ` · ${escapeHtml(item.className)}` : ""}</small>
-                <strong>${escapeHtml(item.title || "시험")}</strong>
-                ${academyDetail}
-              </div>
-              <em>${Number(item.score) || 0}점</em>
-            </div>
-            ${classResultList}
+    ? [["school", "학교 중간·기말고사"], ["academy", "학원 단원평가·쪽지시험"]]
+      .map(([type, heading]) => {
+        const items = scores.filter((item) => item.type === type);
+        if (!items.length) return "";
+        return `<section class="student-score-group"><h3>${heading}</h3><div class="student-score-grid">${items.map((item) => {
+          const attempts = studentScoreAttempts(item);
+          const latest = attempts.at(-1);
+          const classResults = Array.isArray(item.classResults) ? item.classResults : [];
+          const classResultList = classResults.length
+            ? `<div class="student-score-class-results"><strong>반 전체 결과</strong>${classResults.map((result) => `<p class="${result.studentId === currentStudentData?.student?.id ? "is-me" : ""}"><b>${Number(result.rank) || ""}위</b><span>${escapeHtml(result.studentName || "학생")}</span><em>${Number(result.score) || 0}점</em></p>`).join("")}</div>`
+            : "";
+          return `<article class="student-score-card">
+            <div class="student-score-main"><div>
+              <small>${escapeHtml(latest.date || item.date || "")} · ${escapeHtml(item.subject || "과학")}${item.className ? ` · ${escapeHtml(item.className)}` : ""}</small>
+              <strong>${escapeHtml(item.title || "시험")}</strong>
+              <span>${studentScoreCategory(item)}${item.type === "academy" ? ` · ${Number(latest.correctCount) || 0}/${Number(item.totalQuestions) || 0}개 정답` : ""}</span>
+            </div><em>${Number(latest.score) || 0}점</em></div>
+            ${renderScoreProgress(item)}${classResultList}
           </article>`;
+        }).join("")}</div></section>`;
       }).join("")
     : `<div class="empty">아직 등록된 성적이 없습니다.</div>`;
 }
